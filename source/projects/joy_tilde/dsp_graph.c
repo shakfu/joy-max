@@ -136,6 +136,8 @@ static void pull_input(dsp_node* node, long n)
     (void)n;
 }
 
+/* --- binary math --- */
+
 static void pull_add(dsp_node* node, long n)
 {
     dsp_pull(node->in[0], n);
@@ -213,6 +215,51 @@ static void pull_max(dsp_node* node, long n)
         out[i] = (a[i] > b[i]) ? a[i] : b[i];
 }
 
+static void pull_mod(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* a = node->in[0]->out;
+    double* b = node->in[1]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = (b[i] != 0.0) ? fmod(a[i], b[i]) : 0.0;
+}
+
+/* --- ternary math --- */
+
+static void pull_clip(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* val = node->in[0]->out;
+    double* lo  = node->in[1]->out;
+    double* hi  = node->in[2]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++) {
+        double v = val[i];
+        if (v < lo[i]) v = lo[i];
+        if (v > hi[i]) v = hi[i];
+        out[i] = v;
+    }
+}
+
+static void pull_mix(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* a = node->in[0]->out;
+    double* b = node->in[1]->out;
+    double* t = node->in[2]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = a[i] + (b[i] - a[i]) * t[i];
+}
+
+/* --- unary math --- */
+
 static void pull_neg(dsp_node* node, long n)
 {
     dsp_pull(node->in[0], n);
@@ -285,6 +332,105 @@ static void pull_sqrt_fn(dsp_node* node, long n)
         out[i] = (a[i] >= 0.0) ? sqrt(a[i]) : 0.0;
 }
 
+static void pull_wrap(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = a[i] - floor(a[i]);
+}
+
+static void pull_fold(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++) {
+        /* triangle-fold into [0,1): phase in [0,2) then fold back */
+        double v = a[i] - floor(a[i]);  /* wrap to [0,1) */
+        v *= 2.0;                        /* scale to [0,2) */
+        if (v > 1.0) v = 2.0 - v;       /* fold back */
+        out[i] = v;
+    }
+}
+
+static void pull_floor(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = floor(a[i]);
+}
+
+static void pull_ceil(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = ceil(a[i]);
+}
+
+static void pull_round(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = round(a[i]);
+}
+
+static void pull_sign(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = (a[i] > 0.0) ? 1.0 : (a[i] < 0.0) ? -1.0 : 0.0;
+}
+
+static void pull_db2a(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = pow(10.0, a[i] / 20.0);
+}
+
+static void pull_a2db(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++) {
+        double v = fabs(a[i]);
+        out[i] = (v > 0.0) ? 20.0 * log10(v) : -120.0;
+    }
+}
+
+static void pull_mtof(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = 440.0 * pow(2.0, (a[i] - 69.0) / 12.0);
+}
+
+static void pull_ftom(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* a = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = (a[i] > 0.0) ? 69.0 + 12.0 * log2(a[i] / 440.0) : 0.0;
+}
+
+/* --- stateful generators --- */
+
 static void pull_sinosc(dsp_node* node, long n)
 {
     dsp_pull(node->in[0], n);
@@ -343,6 +489,299 @@ static void pull_noise(dsp_node* node, long n)
     node->state.rng_state = rng;
 }
 
+static void pull_tri(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* freq = node->in[0]->out;
+    double* out = node->out;
+    double phase = node->state.osc.phase;
+    double inv_sr = node->state.osc.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        /* triangle: 4*|phase - 0.5| - 1, where phase in [0,1) */
+        out[i] = 4.0 * fabs(phase - 0.5) - 1.0;
+        phase += freq[i] * inv_sr;
+        phase -= (double)(long)phase;
+        if (phase < 0.0) phase += 1.0;
+    }
+    node->state.osc.phase = phase;
+}
+
+static void pull_saw(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* freq = node->in[0]->out;
+    double* out = node->out;
+    double phase = node->state.osc.phase;
+    double inv_sr = node->state.osc.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        out[i] = 2.0 * phase - 1.0;
+        phase += freq[i] * inv_sr;
+        phase -= (double)(long)phase;
+        if (phase < 0.0) phase += 1.0;
+    }
+    node->state.osc.phase = phase;
+}
+
+static void pull_pulse(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* freq = node->in[0]->out;
+    double* duty = node->in[1]->out;
+    double* out = node->out;
+    double phase = node->state.osc.phase;
+    double inv_sr = node->state.osc.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        out[i] = (phase < duty[i]) ? 1.0 : -1.0;
+        phase += freq[i] * inv_sr;
+        phase -= (double)(long)phase;
+        if (phase < 0.0) phase += 1.0;
+    }
+    node->state.osc.phase = phase;
+}
+
+/* --- filters --- */
+
+static void pull_onepole(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* out = node->out;
+    double y1 = node->state.onepole.y1;
+    double inv_sr = node->state.onepole.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double coeff = 1.0 - exp(-TWO_PI * fc[i] * inv_sr);
+        y1 += coeff * (sig[i] - y1);
+        out[i] = y1;
+    }
+    node->state.onepole.y1 = y1;
+}
+
+static void pull_hp1(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* out = node->out;
+    double y1 = node->state.onepole.y1;
+    double inv_sr = node->state.onepole.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double coeff = 1.0 - exp(-TWO_PI * fc[i] * inv_sr);
+        y1 += coeff * (sig[i] - y1);
+        out[i] = sig[i] - y1;
+    }
+    node->state.onepole.y1 = y1;
+}
+
+/* SVF (Zavalishin/Simper topology) -- shared tick, different output taps */
+static inline void svf_tick(double input, double cutoff_hz, double q,
+                            double inv_sr,
+                            double* ic1eq, double* ic2eq,
+                            double* lp, double* bp, double* hp)
+{
+    double g = tan(M_PI * cutoff_hz * inv_sr);
+    double k = 1.0 / q;
+    double a1 = 1.0 / (1.0 + g * (g + k));
+    double a2 = g * a1;
+    double a3 = g * a2;
+
+    double v3 = input - *ic2eq;
+    double v1 = a1 * *ic1eq + a2 * v3;
+    double v2 = *ic2eq + a2 * *ic1eq + a3 * v3;
+
+    *ic1eq = 2.0 * v1 - *ic1eq;
+    *ic2eq = 2.0 * v2 - *ic2eq;
+
+    *lp = v2;
+    *bp = v1;
+    *hp = input - k * v1 - v2;
+}
+
+static void pull_svflp(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* qp  = node->in[2]->out;
+    double* out = node->out;
+    double ic1 = node->state.svf.ic1eq;
+    double ic2 = node->state.svf.ic2eq;
+    double inv_sr = node->state.svf.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double lp, bp, hp;
+        svf_tick(sig[i], fc[i], qp[i], inv_sr, &ic1, &ic2, &lp, &bp, &hp);
+        out[i] = lp;
+    }
+    node->state.svf.ic1eq = ic1;
+    node->state.svf.ic2eq = ic2;
+}
+
+static void pull_svfhp(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* qp  = node->in[2]->out;
+    double* out = node->out;
+    double ic1 = node->state.svf.ic1eq;
+    double ic2 = node->state.svf.ic2eq;
+    double inv_sr = node->state.svf.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double lp, bp, hp;
+        svf_tick(sig[i], fc[i], qp[i], inv_sr, &ic1, &ic2, &lp, &bp, &hp);
+        out[i] = hp;
+    }
+    node->state.svf.ic1eq = ic1;
+    node->state.svf.ic2eq = ic2;
+}
+
+static void pull_svfbp(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* qp  = node->in[2]->out;
+    double* out = node->out;
+    double ic1 = node->state.svf.ic1eq;
+    double ic2 = node->state.svf.ic2eq;
+    double inv_sr = node->state.svf.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double lp, bp, hp;
+        svf_tick(sig[i], fc[i], qp[i], inv_sr, &ic1, &ic2, &lp, &bp, &hp);
+        out[i] = bp;
+    }
+    node->state.svf.ic1eq = ic1;
+    node->state.svf.ic2eq = ic2;
+}
+
+/* --- delay --- */
+
+static void pull_delay(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig  = node->in[0]->out;
+    double* time = node->in[1]->out;
+    double* out  = node->out;
+    double* buf  = node->state.delay.buf;
+    long buf_len = node->state.delay.buf_len;
+    long wp      = node->state.delay.write_pos;
+
+    for (long i = 0; i < n; i++) {
+        buf[wp] = sig[i];
+        long delay_samps = (long)time[i];
+        if (delay_samps < 0) delay_samps = 0;
+        if (delay_samps >= buf_len) delay_samps = buf_len - 1;
+        long rp = wp - delay_samps;
+        if (rp < 0) rp += buf_len;
+        out[i] = buf[rp];
+        wp++;
+        if (wp >= buf_len) wp = 0;
+    }
+    node->state.delay.write_pos = wp;
+}
+
+/* --- utilities --- */
+
+static void pull_sah(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig  = node->in[0]->out;
+    double* trig = node->in[1]->out;
+    double* out  = node->out;
+    double held  = node->state.sah.held;
+    double prev  = node->state.sah.prev_trig;
+
+    for (long i = 0; i < n; i++) {
+        /* rising edge: previous <= 0, current > 0 */
+        if (trig[i] > 0.0 && prev <= 0.0)
+            held = sig[i];
+        prev = trig[i];
+        out[i] = held;
+    }
+    node->state.sah.held = held;
+    node->state.sah.prev_trig = prev;
+}
+
+static void pull_latch(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* sig = node->in[0]->out;
+    double* out = node->out;
+    double held = node->state.latch.held;
+
+    for (long i = 0; i < n; i++) {
+        if (sig[i] != 0.0)
+            held = sig[i];
+        out[i] = held;
+    }
+    node->state.latch.held = held;
+}
+
+/* ---- op table for stateless ops ---- */
+
+typedef struct {
+    const char*    name;
+    const char*    alias;     /* NULL if none */
+    dsp_node_type  type;
+    dsp_pull_fn    pull;
+    int            n_inputs;
+} dsp_op_entry;
+
+static const dsp_op_entry dsp_op_table[] = {
+    /* binary math */
+    { "+",     "add",   DSP_ADD,    pull_add,      2 },
+    { "-",     "sub",   DSP_SUB,    pull_sub,      2 },
+    { "*",     "mul",   DSP_MUL,    pull_mul,      2 },
+    { "/",     "div",   DSP_DIV,    pull_div,      2 },
+    { "pow",   NULL,    DSP_POW,    pull_pow,      2 },
+    { "min",   NULL,    DSP_MIN,    pull_min,      2 },
+    { "max",   NULL,    DSP_MAX_OP, pull_max,      2 },
+    { "mod",   NULL,    DSP_MOD,    pull_mod,      2 },
+    /* ternary math */
+    { "clip",  NULL,    DSP_CLIP,   pull_clip,     3 },
+    { "mix",   "lerp",  DSP_MIX,    pull_mix,      3 },
+    /* unary math */
+    { "neg",   NULL,    DSP_NEG,    pull_neg,      1 },
+    { "abs",   NULL,    DSP_ABS,    pull_abs,      1 },
+    { "sin",   NULL,    DSP_SIN,    pull_sin,      1 },
+    { "cos",   NULL,    DSP_COS,    pull_cos,      1 },
+    { "tanh",  NULL,    DSP_TANH,   pull_tanh_fn,  1 },
+    { "exp",   NULL,    DSP_EXP,    pull_exp,      1 },
+    { "log",   NULL,    DSP_LOG,    pull_log_fn,   1 },
+    { "sqrt",  NULL,    DSP_SQRT,   pull_sqrt_fn,  1 },
+    { "wrap",  NULL,    DSP_WRAP,   pull_wrap,     1 },
+    { "fold",  NULL,    DSP_FOLD,   pull_fold,     1 },
+    { "floor", NULL,    DSP_FLOOR,  pull_floor,    1 },
+    { "ceil",  NULL,    DSP_CEIL,   pull_ceil,     1 },
+    { "round", NULL,    DSP_ROUND,  pull_round,    1 },
+    { "sign",  NULL,    DSP_SIGN,   pull_sign,     1 },
+    { "db2a",  NULL,    DSP_DB2A,   pull_db2a,     1 },
+    { "a2db",  NULL,    DSP_A2DB,   pull_a2db,     1 },
+    { "mtof",  NULL,    DSP_MTOF,   pull_mtof,     1 },
+    { "ftom",  NULL,    DSP_FTOM,   pull_ftom,     1 },
+};
+
+#define DSP_OP_TABLE_LEN (sizeof(dsp_op_table) / sizeof(dsp_op_table[0]))
+
 /* ---- compiler helpers ---- */
 
 static void set_err(char* err, int errlen, const char* fmt, ...)
@@ -383,7 +822,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     #define PUSH_NODE(nd) do { \
         if (sp >= DSP_MAX_NODES) { \
             set_err(err, errlen, "stack overflow"); \
-            DSP_FREE(g); return NULL; \
+            goto fail; \
         } \
         stack[sp++] = (nd); \
     } while(0)
@@ -391,7 +830,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     #define POP_NODE(dst) do { \
         if (sp <= 0) { \
             set_err(err, errlen, "stack underflow at '%s'", tok.symbol); \
-            DSP_FREE(g); return NULL; \
+            goto fail; \
         } \
         (dst) = stack[--sp]; \
     } while(0)
@@ -406,8 +845,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
 
         if (g->node_count >= DSP_MAX_NODES) {
             set_err(err, errlen, "too many nodes (max %d)", DSP_MAX_NODES);
-            DSP_FREE(g);
-            return NULL;
+            goto fail;
         }
 
         if (tok.type == TOK_NUMBER) {
@@ -428,8 +866,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             int idx = sym[2] - '1';  /* in1 -> 0, in2 -> 1, etc. */
             if (idx < 0 || idx > 7) {
                 set_err(err, errlen, "invalid input '%s' (use in1..in8)", sym);
-                DSP_FREE(g);
-                return NULL;
+                goto fail;
             }
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_INPUT;
@@ -440,87 +877,79 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             continue;
         }
 
-        /* binary operators */
-        if (strcmp(sym, "+") == 0 || strcmp(sym, "add") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_ADD; nd->pull = pull_add; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "-") == 0 || strcmp(sym, "sub") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_SUB; nd->pull = pull_sub; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "*") == 0 || strcmp(sym, "mul") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_MUL; nd->pull = pull_mul; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "/") == 0 || strcmp(sym, "div") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_DIV; nd->pull = pull_div; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "pow") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_POW; nd->pull = pull_pow; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "min") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_MIN; nd->pull = pull_min; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "max") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_MAX_OP; nd->pull = pull_max; nd->n_inputs = 2;
-            POP_NODE(nd->in[1]); POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
+        /* compile-time stack manipulation (no nodes allocated) */
+        if (strcmp(sym, "dup") == 0) {
+            if (sp < 1) {
+                set_err(err, errlen, "stack underflow at 'dup'");
+                goto fail;
+            }
+            dsp_node* top = stack[sp - 1];
+            PUSH_NODE(top);
+            continue;
+        }
+        if (strcmp(sym, "swap") == 0) {
+            if (sp < 2) {
+                set_err(err, errlen, "stack underflow at 'swap'");
+                goto fail;
+            }
+            dsp_node* tmp = stack[sp - 1];
+            stack[sp - 1] = stack[sp - 2];
+            stack[sp - 2] = tmp;
+            continue;
+        }
+        if (strcmp(sym, "pop") == 0 || strcmp(sym, "drop") == 0) {
+            if (sp < 1) {
+                set_err(err, errlen, "stack underflow at '%s'", sym);
+                goto fail;
+            }
+            sp--;
+            continue;
+        }
+        if (strcmp(sym, "over") == 0) {
+            if (sp < 2) {
+                set_err(err, errlen, "stack underflow at 'over'");
+                goto fail;
+            }
+            dsp_node* second = stack[sp - 2];
+            PUSH_NODE(second);
+            continue;
+        }
+        if (strcmp(sym, "rot") == 0) {
+            if (sp < 3) {
+                set_err(err, errlen, "stack underflow at 'rot'");
+                goto fail;
+            }
+            /* a b c -> b c a */
+            dsp_node* a = stack[sp - 3];
+            stack[sp - 3] = stack[sp - 2];
+            stack[sp - 2] = stack[sp - 1];
+            stack[sp - 1] = a;
+            continue;
+        }
 
-        /* unary operators */
-        } else if (strcmp(sym, "neg") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_NEG; nd->pull = pull_neg; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "abs") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_ABS; nd->pull = pull_abs; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "sin") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_SIN; nd->pull = pull_sin; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "cos") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_COS; nd->pull = pull_cos; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "tanh") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_TANH; nd->pull = pull_tanh_fn; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "exp") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_EXP; nd->pull = pull_exp; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "log") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_LOG; nd->pull = pull_log_fn; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
-        } else if (strcmp(sym, "sqrt") == 0) {
-            dsp_node* nd = ALLOC_NODE();
-            nd->type = DSP_SQRT; nd->pull = pull_sqrt_fn; nd->n_inputs = 1;
-            POP_NODE(nd->in[0]);
-            PUSH_NODE(nd);
+        /* look up in stateless op table */
+        int found = 0;
+        for (int ti = 0; ti < (int)DSP_OP_TABLE_LEN; ti++) {
+            const dsp_op_entry* e = &dsp_op_table[ti];
+            if (strcmp(sym, e->name) == 0 ||
+                (e->alias && strcmp(sym, e->alias) == 0)) {
+                dsp_node* nd = ALLOC_NODE();
+                nd->type = e->type;
+                nd->pull = e->pull;
+                nd->n_inputs = e->n_inputs;
+                /* pop inputs in reverse order */
+                for (int k = e->n_inputs - 1; k >= 0; k--) {
+                    POP_NODE(nd->in[k]);
+                }
+                PUSH_NODE(nd);
+                found = 1;
+                break;
+            }
+        }
+        if (found) continue;
 
-        /* stateful generators */
-        } else if (strcmp(sym, "sinosc") == 0) {
+        /* stateful generators (need custom state init) */
+        if (strcmp(sym, "sinosc") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_SINOSC; nd->pull = pull_sinosc; nd->n_inputs = 1;
             nd->state.osc.phase = 0.0;
@@ -537,14 +966,116 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
         } else if (strcmp(sym, "noise") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_NOISE; nd->pull = pull_noise; nd->n_inputs = 0;
-            /* seed with something non-zero */
             nd->state.rng_state = 0x12345678ABCDEF01ULL;
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "tri") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_TRI; nd->pull = pull_tri; nd->n_inputs = 1;
+            nd->state.osc.phase = 0.0;
+            nd->state.osc.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "saw") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SAW; nd->pull = pull_saw; nd->n_inputs = 1;
+            nd->state.osc.phase = 0.0;
+            nd->state.osc.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "pulse") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_PULSE; nd->pull = pull_pulse; nd->n_inputs = 2;
+            nd->state.osc.phase = 0.0;
+            nd->state.osc.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        /* filters */
+        } else if (strcmp(sym, "onepole") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_ONEPOLE; nd->pull = pull_onepole; nd->n_inputs = 2;
+            nd->state.onepole.y1 = 0.0;
+            nd->state.onepole.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "hp1") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_HP1; nd->pull = pull_hp1; nd->n_inputs = 2;
+            nd->state.onepole.y1 = 0.0;
+            nd->state.onepole.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "svflp") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SVFLP; nd->pull = pull_svflp; nd->n_inputs = 3;
+            nd->state.svf.ic1eq = 0.0;
+            nd->state.svf.ic2eq = 0.0;
+            nd->state.svf.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "svfhp") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SVFHP; nd->pull = pull_svfhp; nd->n_inputs = 3;
+            nd->state.svf.ic1eq = 0.0;
+            nd->state.svf.ic2eq = 0.0;
+            nd->state.svf.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "svfbp") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SVFBP; nd->pull = pull_svfbp; nd->n_inputs = 3;
+            nd->state.svf.ic1eq = 0.0;
+            nd->state.svf.ic2eq = 0.0;
+            nd->state.svf.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        /* delay */
+        } else if (strcmp(sym, "delay") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_DELAY; nd->pull = pull_delay; nd->n_inputs = 2;
+            long max_delay = (long)(4.0 * sr);
+            if (max_delay < 1) max_delay = 1;
+            nd->state.delay.buf = (double*)DSP_ALLOC(max_delay * sizeof(double));
+            if (!nd->state.delay.buf) {
+                set_err(err, errlen, "delay buffer allocation failed");
+                goto fail;
+            }
+            memset(nd->state.delay.buf, 0, max_delay * sizeof(double));
+            nd->state.delay.buf_len = max_delay;
+            nd->state.delay.write_pos = 0;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        /* utilities */
+        } else if (strcmp(sym, "sah") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SAH; nd->pull = pull_sah; nd->n_inputs = 2;
+            nd->state.sah.held = 0.0;
+            nd->state.sah.prev_trig = 0.0;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "latch") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_LATCH; nd->pull = pull_latch; nd->n_inputs = 1;
+            nd->state.latch.held = 0.0;
+            POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
 
         } else {
             set_err(err, errlen, "unknown token '%s'", sym);
-            DSP_FREE(g);
-            return NULL;
+            goto fail;
         }
     }
 
@@ -555,8 +1086,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     /* must have exactly one value on compile stack */
     if (sp != 1) {
         set_err(err, errlen, "expression leaves %d values on stack (expected 1)", sp);
-        DSP_FREE(g);
-        return NULL;
+        goto fail;
     }
 
     g->root = stack[0];
@@ -566,8 +1096,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     g->buffer_pool = (double*)DSP_ALLOC(pool_size * sizeof(double));
     if (!g->buffer_pool) {
         set_err(err, errlen, "buffer pool allocation failed");
-        DSP_FREE(g);
-        return NULL;
+        goto fail;
     }
     memset(g->buffer_pool, 0, pool_size * sizeof(double));
 
@@ -581,6 +1110,17 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     }
 
     return g;
+
+fail:
+    /* free any delay buffers that were allocated before failure */
+    for (int i = 0; i < g->node_count; i++) {
+        if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
+            DSP_FREE(g->nodes[i].state.delay.buf);
+    }
+    if (g->buffer_pool)
+        DSP_FREE(g->buffer_pool);
+    DSP_FREE(g);
+    return NULL;
 }
 
 /* ---- process ---- */
@@ -632,6 +1172,11 @@ void dsp_graph_process(dsp_graph* g,
 void dsp_graph_free(dsp_graph* g)
 {
     if (!g) return;
+    /* free delay buffers */
+    for (int i = 0; i < g->node_count; i++) {
+        if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
+            DSP_FREE(g->nodes[i].state.delay.buf);
+    }
     if (g->buffer_pool)
         DSP_FREE(g->buffer_pool);
     DSP_FREE(g);

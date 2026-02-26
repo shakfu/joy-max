@@ -17,8 +17,8 @@
  *  Send new perform code or bang to recompute.
  *
  *  Two modes:
- *    perform <Joy code>   -- Joy eval on message thread, loops buffer
- *    dsp <expr>           -- compile RPN expression to native DSP graph
+ *    perform <expr>       -- tries DSP compile first, falls back to Joy eval
+ *    dsp <expr>           -- compile RPN expression to native DSP graph (no fallback)
  *    stop                 -- silence (both modes)
  *
  *  Usage:
@@ -339,11 +339,33 @@ static void joy_tilde_anything(t_joy_tilde* x, t_symbol* s, long argc, t_atom* a
         strncpy(x->perform_code, text, JOY_TILDE_CODE_BUF - 1);
         x->perform_code[JOY_TILDE_CODE_BUF - 1] = '\0';
 
-        /* switching to buffer mode -- clear any active DSP graph */
+        /* try DSP compile first */
+        char dsp_err[DSP_ERR_BUF];
+        dsp_graph* new_graph = dsp_compile(text, x->sample_rate,
+                                           x->vector_size, dsp_err, DSP_ERR_BUF);
+        if (new_graph) {
+            /* DSP compile succeeded -- use graph mode */
+            dsp_graph* old = x->graph;
+            x->graph = new_graph;
+            x->has_perform = 1;
+            if (old)
+                dsp_graph_free(old);
+            if (x->verbose)
+                object_post((t_object*)x, "joy~: perform -> DSP graph (%d nodes)",
+                            new_graph->node_count);
+            sysmem_freeptr(text);
+            return;
+        }
+
+        /* DSP compile failed -- fall back to Joy eval (buffer mode) */
         if (x->graph) {
             dsp_graph_free(x->graph);
             x->graph = NULL;
         }
+
+        if (x->verbose)
+            object_post((t_object*)x,
+                "joy~: perform -> Joy fallback (DSP: %s)", dsp_err);
 
         joy_tilde_eval_perform(x, text);
         sysmem_freeptr(text);

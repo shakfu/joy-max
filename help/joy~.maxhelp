@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 100.0, 100.0, 900.0, 780.0 ],
+        "rect": [ 100.0, 100.0, 872.0, 903.0 ],
         "boxes": [
             {
                 "box": {
@@ -17,7 +17,7 @@
                     "maxclass": "ezdac~",
                     "numinlets": 2,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 640.0, 45.0, 45.0 ]
+                    "patching_rect": [ 30.0, 780.0, 45.0, 45.0 ]
                 }
             },
             {
@@ -39,7 +39,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "patching_rect": [ 15.0, 45.0, 850.0, 20.0 ],
-                    "text": "Two modes: 'perform' evaluates Joy code into a looping buffer. 'dsp' compiles an RPN expression to a real-time DSP graph."
+                    "text": "'perform' tries DSP compile first, falls back to Joy eval. 'dsp' compiles RPN to a real-time DSP graph (no fallback)."
                 }
             },
             {
@@ -50,7 +50,7 @@
                     "numinlets": 1,
                     "numoutlets": 0,
                     "patching_rect": [ 30.0, 80.0, 400.0, 20.0 ],
-                    "text": "DSP graph mode (real-time, zero allocation)"
+                    "text": "Generators"
                 }
             },
             {
@@ -61,7 +61,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 30.0, 105.0, 180.0, 22.0 ],
-                    "text": "dsp 440 sinosc"
+                    "text": "perform 440 sinosc"
                 }
             },
             {
@@ -72,7 +72,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 220.0, 105.0, 200.0, 22.0 ],
-                    "text": "dsp 440 sinosc 0.3 *"
+                    "text": "perform 440 sinosc 0.3 *"
                 }
             },
             {
@@ -82,8 +82,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 430.0, 105.0, 250.0, 22.0 ],
-                    "text": "dsp 100 phasor 2 * 1 - abs"
+                    "patching_rect": [ 430.0, 105.0, 180.0, 22.0 ],
+                    "text": "perform 440 tri"
                 }
             },
             {
@@ -93,8 +93,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 30.0, 135.0, 120.0, 22.0 ],
-                    "text": "dsp noise"
+                    "patching_rect": [ 30.0, 135.0, 180.0, 22.0 ],
+                    "text": "perform 440 saw 0.5 *"
                 }
             },
             {
@@ -104,8 +104,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 160.0, 135.0, 200.0, 22.0 ],
-                    "text": "dsp in1 sin"
+                    "patching_rect": [ 220.0, 135.0, 220.0, 22.0 ],
+                    "text": "perform 440 0.5 pulse 0.3 *"
                 }
             },
             {
@@ -115,19 +115,140 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 370.0, 135.0, 250.0, 22.0 ],
-                    "text": "dsp 440 sinosc in1 *"
+                    "patching_rect": [ 450.0, 135.0, 200.0, 22.0 ],
+                    "text": "perform noise 0.2 *"
                 }
             },
             {
                 "box": {
-                    "id": "obj-cycle",
-                    "maxclass": "newobj",
+                    "fontface": 1,
+                    "id": "obj-section-stack",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 170.0, 400.0, 20.0 ],
+                    "text": "Stack ops & math"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-dup",
+                    "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
-                    "outlettype": [ "signal" ],
-                    "patching_rect": [ 630.0, 135.0, 80.0, 22.0 ],
-                    "text": "cycle~ 2"
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 195.0, 280.0, 22.0 ],
+                    "text": "perform 100 phasor dup 2 * 1 - abs"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-mtof",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 320.0, 195.0, 200.0, 22.0 ],
+                    "text": "perform 69 mtof sinosc"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-wrap",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 530.0, 195.0, 250.0, 22.0 ],
+                    "text": "perform 200 phasor wrap 2 * 1 -"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
+                    "id": "obj-section-filter",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 230.0, 400.0, 20.0 ],
+                    "text": "Filters"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-onepole",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 255.0, 250.0, 22.0 ],
+                    "text": "perform noise 5000 onepole"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-hp1",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 290.0, 255.0, 250.0, 22.0 ],
+                    "text": "perform noise 200 hp1"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-svflp",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 285.0, 280.0, 22.0 ],
+                    "text": "perform noise 2000 0.707 svflp"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-svfhp",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 320.0, 285.0, 280.0, 22.0 ],
+                    "text": "perform noise 2000 0.707 svfhp"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-svfbp",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 610.0, 285.0, 205.0, 22.0 ],
+                    "text": "perform noise 1000 5 svfbp"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
+                    "id": "obj-section-delay",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 320.0, 400.0, 20.0 ],
+                    "text": "Delay & utilities"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-delay",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 345.0, 280.0, 22.0 ],
+                    "text": "perform 440 sinosc 22050 delay"
                 }
             },
             {
@@ -137,8 +258,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 175.0, 400.0, 20.0 ],
-                    "text": "Buffer mode (Joy eval, looping waveform)"
+                    "patching_rect": [ 30.0, 380.0, 400.0, 20.0 ],
+                    "text": "Joy fallback (buffer mode)"
                 }
             },
             {
@@ -148,8 +269,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 30.0, 200.0, 290.0, 22.0 ],
-                    "text": "perform 0.0 6.283185307 512 vlinspace [sin] map"
+                    "patching_rect": [ 30.0, 405.0, 290.0, 22.0 ],
+                    "text": "perform 0. 6.283185 512 vlinspace [sin] map"
                 }
             },
             {
@@ -159,30 +280,52 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 330.0, 200.0, 310.0, 22.0 ],
-                    "text": "perform 0.0 6.283185307 1024 vlinspace [sin] map"
+                    "patching_rect": [ 330.0, 405.0, 310.0, 22.0 ],
+                    "text": "perform 0. 6.283185 1024 vlinspace [sin] map"
                 }
             },
             {
                 "box": {
-                    "id": "obj-perform3",
-                    "maxclass": "message",
-                    "numinlets": 2,
-                    "numoutlets": 1,
-                    "outlettype": [ "" ],
-                    "patching_rect": [ 30.0, 230.0, 350.0, 22.0 ],
-                    "text": "perform 0.0 6.283185307 256 vlinspace [3 * sin] map"
+                    "fontface": 1,
+                    "id": "obj-section-input",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 440.0, 400.0, 20.0 ],
+                    "text": "Signal input processing"
                 }
             },
             {
                 "box": {
-                    "id": "obj-perform4",
+                    "id": "obj-input1",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 400.0, 230.0, 180.0, 22.0 ],
-                    "text": "perform 0.5"
+                    "patching_rect": [ 30.0, 465.0, 200.0, 22.0 ],
+                    "text": "dsp in1 0.5 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-input2",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 240.0, 465.0, 250.0, 22.0 ],
+                    "text": "dsp in1 sin"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-cycle",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "signal" ],
+                    "patching_rect": [ 630.0, 465.0, 80.0, 22.0 ],
+                    "text": "cycle~ 2"
                 }
             },
             {
@@ -192,7 +335,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 700.0, 200.0, 50.0, 22.0 ],
+                    "patching_rect": [ 700.0, 405.0, 50.0, 22.0 ],
                     "text": "stop"
                 }
             },
@@ -203,7 +346,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 760.0, 200.0, 55.0, 22.0 ],
+                    "patching_rect": [ 760.0, 405.0, 55.0, 22.0 ],
                     "text": "status"
                 }
             },
@@ -214,7 +357,7 @@
                     "numinlets": 1,
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
-                    "patching_rect": [ 30.0, 310.0, 50.0, 22.0 ],
+                    "patching_rect": [ 30.0, 520.0, 51.0, 22.0 ],
                     "text": "joy~ 1 1"
                 }
             },
@@ -227,7 +370,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 30.0, 370.0, 29.0, 180.0 ]
+                    "patching_rect": [ 30.0, 560.0, 29.0, 150.0 ]
                 }
             },
             {
@@ -237,7 +380,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 120.0, 370.0, 200.0, 22.0 ]
+                    "patching_rect": [ 120.0, 560.0, 200.0, 22.0 ]
                 }
             },
             {
@@ -246,7 +389,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 120.0, 395.0, 100.0, 20.0 ],
+                    "patching_rect": [ 120.0, 585.0, 100.0, 20.0 ],
                     "text": "info outlet"
                 }
             },
@@ -257,7 +400,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 430.0, 300.0, 20.0 ],
+                    "patching_rect": [ 74.0, 629.0, 300.0, 20.0 ],
                     "text": "Reference:"
                 }
             },
@@ -267,8 +410,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 455.0, 800.0, 20.0 ],
-                    "text": "perform <Joy code> - evaluate Joy, loop result as waveform (message thread, GC-safe)"
+                    "patching_rect": [ 89.0, 654.0, 726.0, 20.0 ],
+                    "text": "perform <expr> - tries DSP compile first, falls back to Joy eval"
                 }
             },
             {
@@ -277,8 +420,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 475.0, 800.0, 20.0 ],
-                    "text": "dsp <expr> - compile RPN expression to native DSP graph (real-time, zero allocation)"
+                    "patching_rect": [ 89.0, 674.0, 726.0, 20.0 ],
+                    "text": "dsp <expr> - compile RPN expression to native DSP graph (no fallback, reports errors)"
                 }
             },
             {
@@ -287,8 +430,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 495.0, 800.0, 20.0 ],
-                    "text": "bang - re-evaluate last perform code (no-op in dsp mode)"
+                    "patching_rect": [ 89.0, 694.0, 726.0, 20.0 ],
+                    "text": "bang - re-evaluate last perform code (no-op in dsp graph mode)"
                 }
             },
             {
@@ -297,7 +440,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 515.0, 800.0, 20.0 ],
+                    "patching_rect": [ 89.0, 714.0, 726.0, 20.0 ],
                     "text": "stop - silence output, clear both modes"
                 }
             },
@@ -308,7 +451,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 545.0, 400.0, 20.0 ],
+                    "patching_rect": [ 74.0, 739.0, 400.0, 20.0 ],
                     "text": "DSP expression tokens:"
                 }
             },
@@ -318,8 +461,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 570.0, 800.0, 20.0 ],
-                    "text": "numbers, in1..in8, + - * / pow min max, sin cos tanh exp log sqrt abs neg, sinosc phasor noise"
+                    "patching_rect": [ 89.0, 762.0, 726.0, 20.0 ],
+                    "text": "math: + - * / pow min max mod, clip mix/lerp, neg abs sin cos tanh exp log sqrt wrap fold floor ceil round sign db2a a2db mtof ftom"
                 }
             },
             {
@@ -328,34 +471,32 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 45.0, 590.0, 800.0, 20.0 ],
-                    "text": "Arguments: joy~ <num_inputs> <num_outputs> (default: 1 1, max: 8 8)"
+                    "patching_rect": [ 89.0, 782.0, 726.0, 20.0 ],
+                    "text": "gen: sinosc phasor noise tri saw pulse | filt: onepole hp1 svflp svfhp svfbp | util: delay sah latch | stack: dup swap pop over rot"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-dspref2",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 89.0, 802.0, 726.0, 20.0 ],
+                    "text": "inputs: in1..in8, numbers | Arguments: joy~ <num_inputs> <num_outputs> (default: 1 1, max: 8 8)"
                 }
             }
         ],
         "lines": [
             {
                 "patchline": {
-                    "destination": [ "obj-1", 1 ],
-                    "source": [ "obj-gain", 0 ]
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-cycle", 0 ]
                 }
             },
             {
                 "patchline": {
-                    "destination": [ "obj-1", 0 ],
-                    "source": [ "obj-gain", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-gain", 0 ],
-                    "source": [ "obj-joy", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-info", 1 ],
-                    "source": [ "obj-joy", 1 ]
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-delay", 0 ]
                 }
             },
             {
@@ -397,7 +538,63 @@
             {
                 "patchline": {
                     "destination": [ "obj-joy", 0 ],
-                    "source": [ "obj-cycle", 0 ]
+                    "source": [ "obj-dup", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 1 ],
+                    "order": 0,
+                    "source": [ "obj-gain", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "order": 1,
+                    "source": [ "obj-gain", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-hp1", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-input1", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-input2", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-gain", 0 ],
+                    "source": [ "obj-joy", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-info", 1 ],
+                    "source": [ "obj-joy", 1 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-mtof", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-onepole", 0 ]
                 }
             },
             {
@@ -415,18 +612,6 @@
             {
                 "patchline": {
                     "destination": [ "obj-joy", 0 ],
-                    "source": [ "obj-perform3", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-joy", 0 ],
-                    "source": [ "obj-perform4", 0 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-joy", 0 ],
                     "source": [ "obj-status", 0 ]
                 }
             },
@@ -434,6 +619,30 @@
                 "patchline": {
                     "destination": [ "obj-joy", 0 ],
                     "source": [ "obj-stop", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-svfbp", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-svfhp", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-svflp", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-wrap", 0 ]
                 }
             }
         ],

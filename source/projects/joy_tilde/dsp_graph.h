@@ -32,6 +32,10 @@ typedef enum {
     DSP_POW,
     DSP_MIN,
     DSP_MAX_OP,
+    DSP_MOD,
+    /* ternary math */
+    DSP_CLIP,
+    DSP_MIX,
     /* unary math */
     DSP_NEG,
     DSP_ABS,
@@ -41,10 +45,33 @@ typedef enum {
     DSP_EXP,
     DSP_LOG,
     DSP_SQRT,
+    DSP_WRAP,
+    DSP_FOLD,
+    DSP_FLOOR,
+    DSP_CEIL,
+    DSP_ROUND,
+    DSP_SIGN,
+    DSP_DB2A,
+    DSP_A2DB,
+    DSP_MTOF,
+    DSP_FTOM,
     /* stateful generators */
     DSP_SINOSC,
     DSP_PHASOR,
     DSP_NOISE,
+    DSP_TRI,
+    DSP_SAW,
+    DSP_PULSE,
+    /* filters */
+    DSP_ONEPOLE,
+    DSP_HP1,
+    DSP_SVFLP,
+    DSP_SVFHP,
+    DSP_SVFBP,
+    /* delay + utilities */
+    DSP_DELAY,
+    DSP_SAH,
+    DSP_LATCH,
 } dsp_node_type;
 
 /* ---- node struct ---- */
@@ -66,8 +93,29 @@ typedef struct dsp_node {
         struct {
             double  phase;
             double  inv_sr;
-        } osc;                      /* DSP_SINOSC, DSP_PHASOR */
+        } osc;                      /* DSP_SINOSC, DSP_PHASOR, DSP_TRI, DSP_SAW, DSP_PULSE */
         uint64_t    rng_state;      /* DSP_NOISE */
+        struct {
+            double  y1;
+            double  inv_sr;
+        } onepole;                  /* DSP_ONEPOLE, DSP_HP1 */
+        struct {
+            double  ic1eq;
+            double  ic2eq;
+            double  inv_sr;
+        } svf;                      /* DSP_SVFLP, DSP_SVFHP, DSP_SVFBP */
+        struct {
+            double* buf;
+            long    buf_len;
+            long    write_pos;
+        } delay;                    /* DSP_DELAY */
+        struct {
+            double  held;
+            double  prev_trig;
+        } sah;                      /* DSP_SAH */
+        struct {
+            double  held;
+        } latch;                    /* DSP_LATCH */
     } state;
 } dsp_node;
 
