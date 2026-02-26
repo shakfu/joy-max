@@ -73,18 +73,20 @@ MACRO(SUBDIRLIST result curdir)
   SET(${result} ${dirlist})
 ENDMACRO()
 
-# Build joycore static library first (needed by joy_object and joy_tilde)
+# Build static libraries first (needed by externals)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/joy_core)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/libdsp)
 
 # Generate a project for every folder in the "source/category" folder
-# Exclude "joy" (submodule) and "joy_core" (built above) from auto-discovery
+# Exclude "joy" (submodule), "joy_core", and "libdsp" (built above) from auto-discovery
 SUBDIRLIST(CATEGORY_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/source)
 foreach (cat_dir ${CATEGORY_DIRS})
   SUBDIRLIST(PROJECT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/source/${cat_dir})
   foreach (project_dir ${PROJECT_DIRS})
     if (NOT project_dir STREQUAL "sapf" AND
         NOT project_dir STREQUAL "joy" AND
-        NOT project_dir STREQUAL "joy_core")
+        NOT project_dir STREQUAL "joy_core" AND
+        NOT project_dir STREQUAL "libdsp")
       set(project_path ${CMAKE_CURRENT_SOURCE_DIR}/source/${cat_dir}/${project_dir})
       if (EXISTS "${project_path}/CMakeLists.txt")
         message("Generating: ${project_dir}")

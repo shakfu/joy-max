@@ -17,6 +17,6 @@ add_library(
     ${PROJECT_SRC}
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE joycore dsp)
+target_link_libraries(${PROJECT_NAME} PRIVATE dsp)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-posttarget.cmake)
