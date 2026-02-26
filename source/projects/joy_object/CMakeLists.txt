@@ -1,0 +1,25 @@
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-pretarget.cmake)
+
+# Override output name: directory is "joy_object" but external should be "joy"
+set(${PROJECT_NAME}_EXTERN_OUTPUT_NAME "joy" CACHE STRING "" FORCE)
+
+include_directories(
+    "${MAX_SDK_INCLUDES}"
+    "${MAX_SDK_MSP_INCLUDES}"
+    "${MAX_SDK_JIT_INCLUDES}"
+)
+
+file(GLOB PROJECT_SRC
+    "*.h"
+    "*.c"
+)
+
+add_library(
+    ${PROJECT_NAME}
+    MODULE
+    ${PROJECT_SRC}
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE joycore)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-posttarget.cmake)

@@ -1,5 +1,11 @@
+.DS_Store
+
 # Prerequisites
 *.d
+
+# 
+build/
+externals/
 
 # Object files
 *.o
@@ -53,3 +59,8 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# agents
+.claude
+CLAUDE.md
+AGENTS.md
