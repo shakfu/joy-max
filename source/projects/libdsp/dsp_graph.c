@@ -1181,25 +1181,52 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             continue;
         }
 
-        /* let bindings: <expr> let <name> */
+        /* let bindings: <expr> let <name>  OR  <exprs> let | n1 n2 ... | */
         if (strcmp(sym, "let") == 0) {
-            if (sp < 1) {
-                set_err(err, errlen, "stack underflow at 'let'");
-                goto fail;
+            dsp_token peek = tok_next_stacked(tok_stack, &tok_depth);
+
+            if (peek.type == TOK_SYMBOL && strcmp(peek.symbol, "|") == 0) {
+                /* multi-name: let | name1 name2 ... | */
+                while (1) {
+                    dsp_token name_tok = tok_next_stacked(tok_stack, &tok_depth);
+                    if (name_tok.type == TOK_SYMBOL && strcmp(name_tok.symbol, "|") == 0)
+                        break;
+                    if (name_tok.type != TOK_SYMBOL || !isalpha((unsigned char)name_tok.symbol[0])) {
+                        set_err(err, errlen, "'let |' expected name or '|'");
+                        goto fail;
+                    }
+                    if (sp < 1) {
+                        set_err(err, errlen, "stack underflow at 'let'");
+                        goto fail;
+                    }
+                    if (nbindings >= DSP_MAX_BINDINGS) {
+                        set_err(err, errlen, "too many let bindings (max %d)", DSP_MAX_BINDINGS);
+                        goto fail;
+                    }
+                    strncpy(bindings[nbindings].name, name_tok.symbol, 63);
+                    bindings[nbindings].name[63] = '\0';
+                    bindings[nbindings].node = stack[--sp];
+                    nbindings++;
+                }
+            } else {
+                /* single-name: let <name> (backward compatible) */
+                if (peek.type != TOK_SYMBOL) {
+                    set_err(err, errlen, "'let' must be followed by a name");
+                    goto fail;
+                }
+                if (sp < 1) {
+                    set_err(err, errlen, "stack underflow at 'let'");
+                    goto fail;
+                }
+                if (nbindings >= DSP_MAX_BINDINGS) {
+                    set_err(err, errlen, "too many let bindings (max %d)", DSP_MAX_BINDINGS);
+                    goto fail;
+                }
+                strncpy(bindings[nbindings].name, peek.symbol, 63);
+                bindings[nbindings].name[63] = '\0';
+                bindings[nbindings].node = stack[--sp];
+                nbindings++;
             }
-            dsp_token name_tok = tok_next_stacked(tok_stack, &tok_depth);
-            if (name_tok.type != TOK_SYMBOL) {
-                set_err(err, errlen, "'let' must be followed by a name");
-                goto fail;
-            }
-            if (nbindings >= DSP_MAX_BINDINGS) {
-                set_err(err, errlen, "too many let bindings (max %d)", DSP_MAX_BINDINGS);
-                goto fail;
-            }
-            strncpy(bindings[nbindings].name, name_tok.symbol, 63);
-            bindings[nbindings].name[63] = '\0';
-            bindings[nbindings].node = stack[--sp];
-            nbindings++;
             continue;
         }
 
@@ -1718,4 +1745,102 @@ void dsp_func_clear(dsp_func_table* ft)
 {
     if (!ft) return;
     ft->count = 0;
+}
+
+int dsp_func_load_text(dsp_func_table* ft, const char* text,
+                       char* err, int errlen)
+{
+    if (!ft || !text) return -1;
+
+    int count = 0;
+    int lineno = 0;
+    const char* p = text;
+
+    while (*p) {
+        /* extract one line */
+        const char* line_start = p;
+        while (*p && *p != '\n' && *p != '\r')
+            p++;
+
+        int line_len = (int)(p - line_start);
+
+        /* advance past line ending */
+        if (*p == '\r') p++;
+        if (*p == '\n') p++;
+
+        lineno++;
+
+        /* skip leading whitespace */
+        const char* s = line_start;
+        const char* line_end = line_start + line_len;
+        while (s < line_end && isspace((unsigned char)*s))
+            s++;
+
+        /* skip blank lines and comments */
+        if (s >= line_end || *s == '#')
+            continue;
+
+        /* expect "def <name> <body...>" */
+        if (line_end - s < 4 || strncmp(s, "def ", 4) != 0) {
+            set_err(err, errlen, "line %d: expected 'def', got '%.*s'",
+                    lineno, (int)(line_end - s > 20 ? 20 : line_end - s), s);
+            return -1;
+        }
+
+        /* skip "def " */
+        s += 4;
+        while (s < line_end && isspace((unsigned char)*s))
+            s++;
+
+        /* extract name */
+        const char* name_start = s;
+        while (s < line_end && !isspace((unsigned char)*s))
+            s++;
+
+        if (s == name_start) {
+            set_err(err, errlen, "line %d: missing function name after 'def'", lineno);
+            return -1;
+        }
+
+        /* null-terminate name into a local buffer */
+        int name_len = (int)(s - name_start);
+        if (name_len >= DSP_FUNC_NAME_LEN) {
+            set_err(err, errlen, "line %d: function name too long", lineno);
+            return -1;
+        }
+        char name[DSP_FUNC_NAME_LEN];
+        memcpy(name, name_start, name_len);
+        name[name_len] = '\0';
+
+        /* skip whitespace to body */
+        while (s < line_end && isspace((unsigned char)*s))
+            s++;
+
+        if (s >= line_end) {
+            set_err(err, errlen, "line %d: missing body for 'def %s'", lineno, name);
+            return -1;
+        }
+
+        /* body is the rest of the line (trim trailing whitespace) */
+        const char* body_start = s;
+        const char* body_end = line_end;
+        while (body_end > body_start && isspace((unsigned char)*(body_end - 1)))
+            body_end--;
+
+        int body_len = (int)(body_end - body_start);
+        if (body_len >= DSP_FUNC_BODY_LEN) {
+            set_err(err, errlen, "line %d: function body too long", lineno);
+            return -1;
+        }
+        char body[DSP_FUNC_BODY_LEN];
+        memcpy(body, body_start, body_len);
+        body[body_len] = '\0';
+
+        if (!dsp_func_define(ft, name, body, err, errlen))
+            return -1;
+
+        count++;
+    }
+
+    return count;
 }

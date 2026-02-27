@@ -66,6 +66,8 @@ static void  dg_status(t_dsp_graph_tilde* x);
 static void  dg_def(t_dsp_graph_tilde* x, t_symbol* s, long argc, t_atom* argv);
 static void  dg_undef(t_dsp_graph_tilde* x, t_symbol* s);
 static void  dg_cleardef(t_dsp_graph_tilde* x);
+static void  dg_load(t_dsp_graph_tilde* x, t_symbol* s);
+static void  dg_load_file(t_dsp_graph_tilde* x, const char* filename);
 
 /* ---------- class pointer ---------- */
 
@@ -89,6 +91,7 @@ void ext_main(void* r)
     class_addmethod(c, (method)dg_def,       "def",      A_GIMME, 0);
     class_addmethod(c, (method)dg_undef,     "undef",    A_SYM, 0);
     class_addmethod(c, (method)dg_cleardef,  "cleardef", 0);
+    class_addmethod(c, (method)dg_load,      "load",     A_SYM, 0);
     class_addmethod(c, (method)dg_assist,    "assist",   A_CANT, 0);
 
     CLASS_ATTR_LONG(c, "verbose", 0, t_dsp_graph_tilde, verbose);
@@ -134,6 +137,10 @@ static void* dg_new(t_symbol* s, long argc, t_atom* argv)
     x->vector_size   = 64;
     x->graph         = NULL;
     dsp_func_table_init(&x->funcs);
+
+    /* optional 3rd arg: load a .dsp definitions file */
+    if (argc >= 3 && atom_gettype(argv + 2) == A_SYM)
+        dg_load_file(x, atom_getsym(argv + 2)->s_name);
 
     return x;
 }
@@ -363,4 +370,52 @@ static void dg_cleardef(t_dsp_graph_tilde* x)
     dsp_func_clear(&x->funcs);
     if (x->verbose)
         object_post((t_object*)x, "all functions cleared");
+}
+
+/* ---------- file loading ---------- */
+
+static void dg_load_file(t_dsp_graph_tilde* x, const char* filename)
+{
+    short path;
+    char fullname[MAX_PATH_CHARS];
+    t_fourcc type;
+
+    strncpy(fullname, filename, MAX_PATH_CHARS - 1);
+    fullname[MAX_PATH_CHARS - 1] = '\0';
+    if (locatefile_extended(fullname, &path, &type, NULL, 0)) {
+        object_error((t_object*)x, "file not found: %s", filename);
+        return;
+    }
+
+    t_filehandle fh;
+    if (path_opensysfile(fullname, path, &fh, READ_PERM)) {
+        object_error((t_object*)x, "cannot open: %s", filename);
+        return;
+    }
+
+    t_ptr_size size;
+    sysfile_geteof(fh, &size);
+    char* buf = sysmem_newptr(size + 1);
+    if (!buf) {
+        sysfile_close(fh);
+        object_error((t_object*)x, "allocation failed for: %s", filename);
+        return;
+    }
+    sysfile_read(fh, &size, buf);
+    buf[size] = '\0';
+    sysfile_close(fh);
+
+    char err[DG_ERR_BUF];
+    int n = dsp_func_load_text(&x->funcs, buf, err, DG_ERR_BUF);
+    sysmem_freeptr(buf);
+
+    if (n < 0)
+        object_error((t_object*)x, "load error: %s", err);
+    else
+        object_post((t_object*)x, "loaded %d definitions from %s", n, filename);
+}
+
+static void dg_load(t_dsp_graph_tilde* x, t_symbol* s)
+{
+    dg_load_file(x, s->s_name);
 }

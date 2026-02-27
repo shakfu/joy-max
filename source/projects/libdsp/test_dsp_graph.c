@@ -795,6 +795,62 @@ TEST(let_missing_name_fails) {
     PASS();
 }
 
+/* ---- multi-name let ---- */
+
+TEST(let_multi_basic) {
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    dsp_graph* g = compile_and_process("10 20 let | a b | a b +", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 30.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(let_multi_three) {
+    /* 440 110 200 let | d m c | -> d=200(top), m=110, c=440 */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("440 110 200 let | d m c | m sinosc d * c + sinosc",
+                               SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(let_multi_single_bar) {
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    dsp_graph* g = compile_and_process("42 let | x | x", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 42.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(let_multi_missing_bar) {
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("10 20 let | a b", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g == NULL);
+    PASS();
+}
+
+TEST(let_multi_underflow) {
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("10 let | a b |", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g == NULL);
+    ASSERT(strstr(err, "underflow") != NULL);
+    PASS();
+}
+
+TEST(let_multi_empty) {
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("let | |", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g == NULL);
+    PASS();
+}
+
 /* ---- constant folding ---- */
 
 TEST(fold_basic_math) {
@@ -1051,6 +1107,327 @@ TEST(func_table_helpers) {
     PASS();
 }
 
+/* ---- file loading (dsp_func_load_text) ---- */
+
+TEST(load_text_basic) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text =
+        "def double dup +\n"
+        "def triple dup dup + +\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == 2);
+    ASSERT(ft.count == 2);
+
+    /* verify both definitions work */
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    dsp_graph* g = compile_with_funcs_and_process("21 double", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 42.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_with_funcs_and_process("10 triple", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 30.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(load_text_comments) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text =
+        "# this is a comment\n"
+        "\n"
+        "   # indented comment\n"
+        "def double dup +\n"
+        "\n"
+        "   \n"
+        "# another comment\n"
+        "def negate neg\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == 2);
+    ASSERT(ft.count == 2);
+    PASS();
+}
+
+TEST(load_text_bad_line) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text =
+        "def double dup +\n"
+        "this is not a def\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == -1);
+    ASSERT(strstr(err, "line 2") != NULL);
+    ASSERT(strstr(err, "def") != NULL);
+    PASS();
+}
+
+TEST(load_text_missing_body) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text = "def foo\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == -1);
+    ASSERT(strstr(err, "missing body") != NULL);
+    PASS();
+}
+
+TEST(load_text_integration) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text =
+        "# prelude\n"
+        "def double dup +\n"
+        "def softclip tanh\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == 2);
+
+    /* use loaded defs in a compiled expression */
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    dsp_graph* g = compile_with_funcs_and_process("21 double", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 42.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_with_funcs_and_process("0.5 softclip", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], tanh(0.5), 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(load_text_crlf) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* text = "def double dup +\r\ndef negate neg\r\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, text, err, DSP_ERR_BUF);
+    ASSERT(n == 2);
+    ASSERT(ft.count == 2);
+    PASS();
+}
+
+TEST(load_text_prelude) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    const char* prelude =
+        "# prelude.dsp -- common DSP function definitions\n"
+        "#\n"
+        "# Load via: [dsp_graph~ 1 2 prelude.dsp] or \"load prelude.dsp\"\n"
+        "\n"
+        "# ------- math utilities -------\n"
+        "def double dup +\n"
+        "def half 0.5 *\n"
+        "def square dup *\n"
+        "def reciprocal 1 swap /\n"
+        "def clamp01 0 1 clip\n"
+        "def bipolar 2 * 1 -\n"
+        "def unipolar 1 + 0.5 *\n"
+        "\n"
+        "# ------- conversions -------\n"
+        "def semi2ratio 12 / 2 swap pow\n"
+        "def bpm2hz 60 /\n"
+        "\n"
+        "# ------- waveshaping -------\n"
+        "def softclip tanh\n"
+        "def hardclip -1 1 clip\n"
+        "def saturate dup abs 1 + /\n"
+        "\n"
+        "# ------- oscillators -------\n"
+        "def osc2 dup 1.003 * sinosc swap sinosc + 0.5 *\n"
+        "def subosc let | f | f sinosc f 0.5 * sinosc + 0.5 *\n"
+        "def fmosc let | d m c | m sinosc d * c + sinosc\n"
+        "def ring sinosc *\n"
+        "\n"
+        "# ------- filters -------\n"
+        "def lp 0.707 svflp\n"
+        "def hp 0.707 svfhp\n"
+        "def dcblock 20 hp1\n"
+        "\n"
+        "# ------- dynamics -------\n"
+        "def noiseburst decay noise *\n"
+        "\n"
+        "# ------- stereo -------\n"
+        "def pan let | p s | s 1 p - * s p *\n"
+        "def spread let | f | f 1.003 * sinosc f 0.997 * sinosc\n";
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, prelude, err, DSP_ERR_BUF);
+    ASSERT(n == 22);
+    ASSERT(ft.count == 22);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    /* double */
+    dsp_graph* g = compile_with_funcs_and_process("21 double", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 42.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* half */
+    g = compile_with_funcs_and_process("10 half", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 5.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* square */
+    g = compile_with_funcs_and_process("7 square", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 49.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* reciprocal */
+    g = compile_with_funcs_and_process("4 reciprocal", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.25, 1e-10);
+    dsp_graph_free(g);
+
+    /* clamp01 */
+    g = compile_with_funcs_and_process("1.5 clamp01", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* bipolar: 0.5 -> 0.0 */
+    g = compile_with_funcs_and_process("0.5 bipolar", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* unipolar: 0.0 -> 0.5 */
+    g = compile_with_funcs_and_process("0 unipolar", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.5, 1e-10);
+    dsp_graph_free(g);
+
+    /* semi2ratio: 12 semitones = octave = 2.0 */
+    g = compile_with_funcs_and_process("12 semi2ratio", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 2.0, 1e-6);
+    dsp_graph_free(g);
+
+    /* bpm2hz: 120 BPM = 2 Hz */
+    g = compile_with_funcs_and_process("120 bpm2hz", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 2.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* hardclip */
+    g = compile_with_funcs_and_process("5 hardclip", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* saturate: 0.5/(1+0.5) = 1/3 */
+    g = compile_with_funcs_and_process("0.5 saturate", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.5 / 1.5, 1e-10);
+    dsp_graph_free(g);
+
+    /* softclip: tanh(1) */
+    g = compile_with_funcs_and_process("1 softclip", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], tanh(1.0), 1e-10);
+    dsp_graph_free(g);
+
+    /* osc2 compiles and produces bounded output */
+    g = compile_with_funcs_and_process("440 osc2", &ft, outs, 1);
+    ASSERT(g != NULL);
+    for (long i = 0; i < VS; i++)
+        ASSERT(out_buf[i] >= -1.1 && out_buf[i] <= 1.1);
+    dsp_graph_free(g);
+
+    /* subosc compiles and produces bounded output */
+    g = compile_with_funcs_and_process("440 subosc", &ft, outs, 1);
+    ASSERT(g != NULL);
+    for (long i = 0; i < VS; i++)
+        ASSERT(out_buf[i] >= -1.1 && out_buf[i] <= 1.1);
+    dsp_graph_free(g);
+
+    /* fmosc compiles */
+    g = compile_with_funcs_and_process("440 110 200 fmosc", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* lp compiles (needs signal + freq) */
+    g = compile_with_funcs_and_process("noise 2000 lp", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* hp compiles */
+    g = compile_with_funcs_and_process("noise 200 hp", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* dcblock compiles */
+    g = compile_with_funcs_and_process("noise dcblock", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* ring compiles */
+    g = compile_with_funcs_and_process("440 sinosc 110 ring", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* pan produces 2 outputs */
+    double out2[VS];
+    double* outs_stereo[] = { out_buf, out2 };
+    char perr[DSP_ERR_BUF];
+    g = dsp_compile("440 sinosc 0.3 * 0.25 pan", SR, VS, &ft, perr, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->num_roots == 2);
+    dsp_graph_process(g, NULL, 0, outs_stereo, 2, VS);
+    /* pos=0.25: L = signal*0.75, R = signal*0.25 -> L > R */
+    ASSERT(fabs(out_buf[1]) > fabs(out2[1]));
+    dsp_graph_free(g);
+
+    /* spread produces 2 outputs */
+    g = dsp_compile("440 spread", SR, VS, &ft, perr, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->num_roots == 2);
+    dsp_graph_process(g, NULL, 0, outs_stereo, 2, VS);
+    dsp_graph_free(g);
+
+    PASS();
+}
+
+TEST(load_text_empty) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+
+    char err[DSP_ERR_BUF];
+    int n = dsp_func_load_text(&ft, "", err, DSP_ERR_BUF);
+    ASSERT(n == 0);
+    ASSERT(ft.count == 0);
+
+    n = dsp_func_load_text(&ft, "# only comments\n\n", err, DSP_ERR_BUF);
+    ASSERT(n == 0);
+    PASS();
+}
+
 /* ---- main ---- */
 
 int main(void)
@@ -1137,6 +1514,14 @@ int main(void)
     run_test_let_underflow_fails();
     run_test_let_missing_name_fails();
 
+    /* multi-name let */
+    run_test_let_multi_basic();
+    run_test_let_multi_three();
+    run_test_let_multi_single_bar();
+    run_test_let_multi_missing_bar();
+    run_test_let_multi_underflow();
+    run_test_let_multi_empty();
+
     /* constant folding */
     run_test_fold_basic_math();
     run_test_fold_chain();
@@ -1162,6 +1547,16 @@ int main(void)
     run_test_func_undefined_fails();
     run_test_func_recursion_depth();
     run_test_func_table_helpers();
+
+    /* file loading (dsp_func_load_text) */
+    run_test_load_text_basic();
+    run_test_load_text_comments();
+    run_test_load_text_bad_line();
+    run_test_load_text_missing_body();
+    run_test_load_text_integration();
+    run_test_load_text_prelude();
+    run_test_load_text_crlf();
+    run_test_load_text_empty();
 
     printf("\n%d tests: %d passed, %d failed\n",
            tests_run, tests_passed, tests_failed);

@@ -219,4 +219,13 @@ int  dsp_func_define(dsp_func_table* ft, const char* name, const char* body,
 int  dsp_func_undef(dsp_func_table* ft, const char* name);
 void dsp_func_clear(dsp_func_table* ft);
 
+/*
+ * Load definitions from a text buffer (file contents).
+ * Each non-blank, non-comment line must be: def <name> <body...>
+ * Lines starting with '#' (after optional whitespace) are comments.
+ * Returns number of defs loaded, or -1 on error (message in err).
+ */
+int  dsp_func_load_text(dsp_func_table* ft, const char* text,
+                        char* err, int errlen);
+
 #endif /* DSP_GRAPH_H */

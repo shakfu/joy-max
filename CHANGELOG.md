@@ -9,10 +9,17 @@
   - Nested function calls supported up to 8 levels deep (compile-time recursion guard).
   - `undef <name>` removes a single function; `cleardef` removes all.
   - Available in both `dsp_graph~` and `joy~` externals.
-- `dsp_func_table` API in libdsp: `dsp_func_table_init`, `dsp_func_define`, `dsp_func_undef`, `dsp_func_clear`.
+- **File loading for function definitions** (`load` message and constructor arg):
+  - `load prelude.dsp` loads a batch of `def` statements from a `.dsp` file resolved via the Max search path.
+  - Constructor arg: `[dsp_graph~ 1 2 prelude.dsp]` or `[joy~ 1 2 prelude.dsp]` loads definitions at creation time.
+  - `.dsp` file format: one `def <name> <body>` per line; `#` comments and blank lines are ignored.
+  - Shared parser (`dsp_func_load_text`) in libdsp, testable without the Max SDK.
+  - Available in both `dsp_graph~` and `joy~` externals.
+- `dsp_func_table` API in libdsp: `dsp_func_table_init`, `dsp_func_define`, `dsp_func_undef`, `dsp_func_clear`, `dsp_func_load_text`.
 - `dsp_compile()` now accepts an optional `const dsp_func_table*` parameter (pass `NULL` for no functions).
-- 6 new unit tests covering function basics, nesting, let-binding interaction, error cases, recursion depth, and table helpers.
-- Function examples and token reference in both help patches.
+- 13 new unit tests covering function basics, nesting, let-binding interaction, error cases, recursion depth, table helpers, and file loading (basic, comments, error lines, missing body, integration, CRLF, empty).
+- `examples/prelude.dsp`: example definitions file with `osc2`, `double`, `softclip`.
+- Function and file loading examples and token reference in both help patches.
 
 ## 0.2.0
 

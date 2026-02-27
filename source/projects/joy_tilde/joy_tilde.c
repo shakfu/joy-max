@@ -98,6 +98,8 @@ static void  joy_tilde_status(t_joy_tilde* x);
 static void  joy_tilde_def(t_joy_tilde* x, t_symbol* s, long argc, t_atom* argv);
 static void  joy_tilde_undef(t_joy_tilde* x, t_symbol* s);
 static void  joy_tilde_cleardef(t_joy_tilde* x);
+static void  joy_tilde_load(t_joy_tilde* x, t_symbol* s);
+static void  joy_tilde_load_file(t_joy_tilde* x, const char* filename);
 
 /* I/O callbacks */
 static void  tilde_io_write_char(void* user_data, int ch);
@@ -138,6 +140,7 @@ void ext_main(void* r)
     class_addmethod(c, (method)joy_tilde_def,       "def",      A_GIMME, 0);
     class_addmethod(c, (method)joy_tilde_undef,     "undef",    A_SYM, 0);
     class_addmethod(c, (method)joy_tilde_cleardef,  "cleardef", 0);
+    class_addmethod(c, (method)joy_tilde_load,      "load",     A_SYM, 0);
     class_addmethod(c, (method)joy_tilde_assist,    "assist",   A_CANT, 0);
 
     CLASS_ATTR_LONG(c, "verbose", 0, t_joy_tilde, verbose);
@@ -194,6 +197,10 @@ static void* joy_tilde_new(t_symbol* s, long argc, t_atom* argv)
     dsp_func_table_init(&x->funcs);
 
     joy_tilde_init_context(x);
+
+    /* optional 3rd arg: load a .dsp definitions file */
+    if (argc >= 3 && atom_gettype(argv + 2) == A_SYM)
+        joy_tilde_load_file(x, atom_getsym(argv + 2)->s_name);
 
     return x;
 }
@@ -842,4 +849,52 @@ static long joy_tilde_read_list_to_buffer(pEnv env, Index list,
         POP(node);
     }
     return i;
+}
+
+/* ---------- file loading ---------- */
+
+static void joy_tilde_load_file(t_joy_tilde* x, const char* filename)
+{
+    short path;
+    char fullname[MAX_PATH_CHARS];
+    t_fourcc type;
+
+    strncpy(fullname, filename, MAX_PATH_CHARS - 1);
+    fullname[MAX_PATH_CHARS - 1] = '\0';
+    if (locatefile_extended(fullname, &path, &type, NULL, 0)) {
+        object_error((t_object*)x, "joy~: file not found: %s", filename);
+        return;
+    }
+
+    t_filehandle fh;
+    if (path_opensysfile(fullname, path, &fh, READ_PERM)) {
+        object_error((t_object*)x, "joy~: cannot open: %s", filename);
+        return;
+    }
+
+    t_ptr_size size;
+    sysfile_geteof(fh, &size);
+    char* buf = sysmem_newptr(size + 1);
+    if (!buf) {
+        sysfile_close(fh);
+        object_error((t_object*)x, "joy~: allocation failed for: %s", filename);
+        return;
+    }
+    sysfile_read(fh, &size, buf);
+    buf[size] = '\0';
+    sysfile_close(fh);
+
+    char err[JOY_TILDE_ERR_BUF];
+    int n = dsp_func_load_text(&x->funcs, buf, err, JOY_TILDE_ERR_BUF);
+    sysmem_freeptr(buf);
+
+    if (n < 0)
+        object_error((t_object*)x, "joy~: load error: %s", err);
+    else
+        object_post((t_object*)x, "joy~: loaded %d definitions from %s", n, filename);
+}
+
+static void joy_tilde_load(t_joy_tilde* x, t_symbol* s)
+{
+    joy_tilde_load_file(x, s->s_name);
 }

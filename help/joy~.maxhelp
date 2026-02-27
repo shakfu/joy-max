@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 100.0, 100.0, 900.0, 1130.0 ],
+        "rect": [ 100.0, 100.0, 900.0, 1250.0 ],
         "boxes": [
             {
                 "box": {
@@ -17,7 +17,7 @@
                     "maxclass": "ezdac~",
                     "numinlets": 2,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 1050.0, 45.0, 45.0 ]
+                    "patching_rect": [ 30.0, 1190.0, 45.0, 45.0 ]
                 }
             },
             {
@@ -504,11 +504,43 @@
             {
                 "box": {
                     "fontface": 1,
+                    "id": "obj-section-load",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 820.0, 400.0, 20.0 ],
+                    "text": "File loading -- batch load definitions from .dsp files"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-load",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 845.0, 180.0, 22.0 ],
+                    "text": "load prelude.dsp"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-load-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 220.0, 845.0, 500.0, 20.0 ],
+                    "text": "load file of def statements from Max search path (also works as 3rd constructor arg)"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
                     "id": "obj-section-macro",
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 825.0, 400.0, 20.0 ],
+                    "patching_rect": [ 30.0, 880.0, 400.0, 20.0 ],
                     "text": "Let bindings -- name values for reuse"
                 }
             },
@@ -519,7 +551,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 30.0, 850.0, 360.0, 22.0 ],
+                    "patching_rect": [ 30.0, 905.0, 360.0, 22.0 ],
                     "text": "dsp 440 sinosc let s  s  s 0.3 *"
                 }
             },
@@ -529,7 +561,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 400.0, 850.0, 400.0, 20.0 ],
+                    "patching_rect": [ 400.0, 905.0, 400.0, 20.0 ],
                     "text": "let binding: s = sinosc, output full + 0.3x"
                 }
             },
@@ -562,7 +594,7 @@
                     "numinlets": 1,
                     "numoutlets": 3,
                     "outlettype": [ "signal", "signal", "" ],
-                    "patching_rect": [ 30.0, 890.0, 51.0, 22.0 ],
+                    "patching_rect": [ 30.0, 945.0, 51.0, 22.0 ],
                     "text": "joy~ 1 2"
                 }
             },
@@ -575,7 +607,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 30.0, 930.0, 29.0, 150.0 ]
+                    "patching_rect": [ 30.0, 985.0, 29.0, 150.0 ]
                 }
             },
             {
@@ -587,7 +619,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 85.0, 930.0, 29.0, 150.0 ]
+                    "patching_rect": [ 85.0, 985.0, 29.0, 150.0 ]
                 }
             },
             {
@@ -597,7 +629,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 170.0, 930.0, 200.0, 22.0 ]
+                    "patching_rect": [ 170.0, 985.0, 200.0, 22.0 ]
                 }
             },
             {
@@ -606,7 +638,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 170.0, 955.0, 100.0, 20.0 ],
+                    "patching_rect": [ 170.0, 1010.0, 100.0, 20.0 ],
                     "text": "info outlet"
                 }
             },
@@ -617,7 +649,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 74.0, 900.0, 300.0, 20.0 ],
+                    "patching_rect": [ 74.0, 955.0, 300.0, 20.0 ],
                     "text": "Reference:"
                 }
             },
@@ -627,7 +659,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 925.0, 726.0, 20.0 ],
+                    "patching_rect": [ 89.0, 980.0, 726.0, 20.0 ],
                     "text": "perform <expr> - tries DSP compile first, falls back to Joy eval"
                 }
             },
@@ -637,8 +669,18 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 945.0, 726.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1000.0, 726.0, 20.0 ],
                     "text": "dsp <expr> - compile RPN expression to native DSP graph (no fallback, reports errors)"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-ref-load",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 89.0, 1020.0, 726.0, 20.0 ],
+                    "text": "load <filename> - load .dsp file of def statements (also as 3rd constructor arg)"
                 }
             },
             {
@@ -647,7 +689,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 985.0, 726.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1040.0, 726.0, 20.0 ],
                     "text": "bang - re-evaluate last perform code (no-op in dsp graph mode)"
                 }
             },
@@ -657,7 +699,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 1005.0, 726.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1060.0, 726.0, 20.0 ],
                     "text": "stop - silence output, clear both modes"
                 }
             },
@@ -668,7 +710,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 74.0, 1030.0, 400.0, 20.0 ],
+                    "patching_rect": [ 74.0, 1085.0, 400.0, 20.0 ],
                     "text": "DSP expression tokens:"
                 }
             },
@@ -678,7 +720,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 1053.0, 780.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1108.0, 780.0, 20.0 ],
                     "text": "math: + - * / pow min max mod, clip mix/lerp, neg abs sin cos tanh exp log sqrt wrap fold floor ceil round sign db2a a2db mtof ftom"
                 }
             },
@@ -688,7 +730,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 1073.0, 780.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1128.0, 780.0, 20.0 ],
                     "text": "gen: sinosc phasor noise pink dust tri saw pulse | env: decay | filt: onepole hp1 lag slew svflp svfhp svfbp biquad"
                 }
             },
@@ -698,7 +740,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 1093.0, 780.0, 20.0 ],
+                    "patching_rect": [ 89.0, 1148.0, 780.0, 20.0 ],
                     "text": "util: delay sah latch | stack: dup swap pop over rot | fb: fbread1-4 fbwrite1-4 | bind: <expr> let <name> | func: def <name> <body> | undef <name> | cleardef"
                 }
             },
@@ -708,8 +750,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 89.0, 1113.0, 780.0, 20.0 ],
-                    "text": "inputs: in1..in8, numbers | Multi-output: N stack values -> N outlets | Args: joy~ <num_in> <num_out> (default 1 1, max 8)"
+                    "patching_rect": [ 89.0, 1168.0, 780.0, 20.0 ],
+                    "text": "inputs: in1..in8, numbers | Multi-output: N stack values -> N outlets | Args: joy~ <num_in> <num_out> [file.dsp] (default 1 1, max 8)"
                 }
             }
         ],
@@ -934,6 +976,12 @@
                 "patchline": {
                     "destination": [ "obj-joy", 0 ],
                     "source": [ "obj-func-def", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-joy", 0 ],
+                    "source": [ "obj-load", 0 ]
                 }
             },
             {
