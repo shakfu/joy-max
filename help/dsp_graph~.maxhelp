@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 100.0, 87.0, 991.0, 779.0 ],
+        "rect": [ 100.0, 87.0, 1086.0, 959.0 ],
         "boxes": [
             {
                 "box": {
@@ -17,7 +17,7 @@
                     "maxclass": "ezdac~",
                     "numinlets": 2,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 1051.0, 45.0, 45.0 ]
+                    "patching_rect": [ 30.0, 1358.0, 45.0, 45.0 ]
                 }
             },
             {
@@ -28,7 +28,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 15.0, 15.0, 600.0, 24.0 ],
+                    "patching_rect": [ 15.0, 15.0, 444.0, 24.0 ],
                     "text": "dsp_graph~ - Compiled DSP graph external for Max/MSP"
                 }
             },
@@ -38,7 +38,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 15.0, 45.0, 850.0, 20.0 ],
+                    "patching_rect": [ 15.0, 45.0, 653.0, 20.0 ],
                     "text": "Compiles stack-based RPN expressions to a native DSP graph. No Joy dependency. Any message is a DSP expression."
                 }
             },
@@ -280,7 +280,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 192.0, 315.0, 270.0, 22.0 ],
+                    "patching_rect": [ 214.0, 315.0, 270.0, 22.0 ],
                     "text": "noise 0.0675 0.135 0.0675 -1.143 0.413 biquad"
                 }
             },
@@ -352,17 +352,6 @@
             },
             {
                 "box": {
-                    "id": "obj-cycle",
-                    "maxclass": "newobj",
-                    "numinlets": 2,
-                    "numoutlets": 1,
-                    "outlettype": [ "signal" ],
-                    "patching_rect": [ 437.0, 783.0, 66.0, 22.0 ],
-                    "text": "cycle~ 220"
-                }
-            },
-            {
-                "box": {
                     "fontface": 1,
                     "id": "obj-section-multi",
                     "maxclass": "comment",
@@ -389,7 +378,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 155.0, 495.0, 400.0, 20.0 ],
+                    "patching_rect": [ 164.0, 494.0, 320.0, 20.0 ],
                     "text": "2 values on stack -> output 1: full sine, output 2: 0.3x sine"
                 }
             },
@@ -410,7 +399,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 235.0, 522.0, 350.0, 20.0 ],
+                    "patching_rect": [ 235.0, 522.0, 262.0, 20.0 ],
                     "text": "stereo detuned pair -- L and R slightly different"
                 }
             },
@@ -421,7 +410,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 553.0, 400.0, 20.0 ],
+                    "patching_rect": [ 30.0, 553.0, 262.0, 20.0 ],
                     "text": "Feedback (fbread/fbwrite) -- one-block delay"
                 }
             },
@@ -453,7 +442,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 613.0, 400.0, 20.0 ],
+                    "patching_rect": [ 30.0, 613.0, 359.0, 20.0 ],
                     "text": "Functions (def/undef/cleardef) -- reusable operation patterns"
                 }
             },
@@ -496,7 +485,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 698.0, 400.0, 20.0 ],
+                    "patching_rect": [ 30.0, 698.0, 305.0, 20.0 ],
                     "text": "File loading -- batch load definitions from .dsp files"
                 }
             },
@@ -528,7 +517,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 30.0, 758.0, 400.0, 20.0 ],
+                    "patching_rect": [ 30.0, 758.0, 224.0, 20.0 ],
                     "text": "Let bindings -- name values for reuse"
                 }
             },
@@ -540,7 +529,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 30.0, 783.0, 151.0, 22.0 ],
-                    "text": "440 sinosc let s s s 0.3 *"
+                    "text": "440 sinosc let | s | s s 0.3 *"
                 }
             },
             {
@@ -555,12 +544,171 @@
             },
             {
                 "box": {
+                    "id": "obj-multilet",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 813.0, 305.0, 22.0 ],
+                    "text": "440 110 200 let | d m c | m sinosc d * c + sinosc 0.3 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-multilet-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 345.0, 814.0, 250.0, 20.0 ],
+                    "text": "multi-name let: bind 3 values at once"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
+                    "id": "obj-section-cmp",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 848.0, 182.0, 20.0 ],
+                    "text": "Comparisons & conditionals"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-cmp1",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 873.0, 182.0, 22.0 ],
+                    "text": "440 sinosc let | s | s 0 gt s * 0.3 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-cmp1-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 305.0, 874.0, 280.0, 20.0 ],
+                    "text": "half-wave rectifier: zero out negative samples"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
+                    "id": "obj-section-env",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 908.0, 281.0, 20.0 ],
+                    "text": "Envelopes -- line (ramp 0->1), ar (attack/release)"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-line",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 933.0, 175.0, 22.0 ],
+                    "text": "440 sinosc 1 0.5 line * 0.3 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-line-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 222.0, 934.0, 148.0, 20.0 ],
+                    "text": "line: triggered 0.5s fade-in"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-ar",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 963.0, 191.0, 22.0 ],
+                    "text": "440 sinosc 1 0.01 0.2 ar * 0.3 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-ar-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 235.0, 964.0, 181.0, 20.0 ],
+                    "text": "ar: 10ms attack, 200ms release"
+                }
+            },
+            {
+                "box": {
+                    "fontface": 1,
+                    "id": "obj-section-newdelay",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 30.0, 998.0, 182.0, 20.0 ],
+                    "text": "Fractional delay & notch filter"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-delayf",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 1023.0, 340.0, 22.0 ],
+                    "text": "440 sinosc let s s s 0.3 sinosc 20 * 40 + delayf + 0.5 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-delayf-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 380.0, 1024.0, 213.0, 20.0 ],
+                    "text": "delayf: flanger effect (fractional delay)"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-svfnotch",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 30.0, 1053.0, 175.0, 22.0 ],
+                    "text": "noise 1000 5 svfnotch 0.3 *"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-svfnotch-comment",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 215.0, 1054.0, 280.0, 20.0 ],
+                    "text": "svfnotch: band-reject (notch) filter"
+                }
+            },
+            {
+                "box": {
                     "id": "obj-stop",
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 530.0, 783.0, 50.0, 22.0 ],
+                    "patching_rect": [ 134.0, 1090.0, 50.0, 22.0 ],
                     "text": "stop"
                 }
             },
@@ -571,8 +719,19 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 590.0, 783.0, 55.0, 22.0 ],
+                    "patching_rect": [ 199.0, 1090.0, 55.0, 22.0 ],
                     "text": "status"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-cycle",
+                    "maxclass": "newobj",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "signal" ],
+                    "patching_rect": [ 30.0, 1090.0, 66.0, 22.0 ],
+                    "text": "cycle~ 220"
                 }
             },
             {
@@ -582,7 +741,7 @@
                     "numinlets": 1,
                     "numoutlets": 3,
                     "outlettype": [ "signal", "signal", "" ],
-                    "patching_rect": [ 30.0, 828.0, 92.0, 22.0 ],
+                    "patching_rect": [ 30.0, 1135.0, 92.0, 22.0 ],
                     "text": "dsp_graph~ 1 2"
                 }
             },
@@ -595,7 +754,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 30.0, 873.0, 29.0, 150.0 ]
+                    "patching_rect": [ 30.0, 1180.0, 29.0, 150.0 ]
                 }
             },
             {
@@ -607,7 +766,7 @@
                     "numoutlets": 2,
                     "outlettype": [ "signal", "" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 85.0, 873.0, 29.0, 150.0 ]
+                    "patching_rect": [ 85.0, 1180.0, 29.0, 150.0 ]
                 }
             },
             {
@@ -617,7 +776,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 445.0, 834.0, 200.0, 22.0 ]
+                    "patching_rect": [ 445.0, 1141.0, 200.0, 22.0 ]
                 }
             },
             {
@@ -626,7 +785,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 170.0, 898.0, 100.0, 20.0 ],
+                    "patching_rect": [ 170.0, 1205.0, 100.0, 20.0 ],
                     "text": "info outlet"
                 }
             },
@@ -637,7 +796,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 125.0, 835.0, 300.0, 20.0 ],
+                    "patching_rect": [ 125.0, 1142.0, 300.0, 20.0 ],
                     "text": "Reference:"
                 }
             },
@@ -647,7 +806,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 860.0, 424.0, 20.0 ],
+                    "patching_rect": [ 140.0, 1167.0, 424.0, 20.0 ],
                     "text": "<expr> - any message compiles and runs an RPN DSP expression"
                 }
             },
@@ -657,7 +816,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 880.0, 424.0, 20.0 ],
+                    "patching_rect": [ 140.0, 1187.0, 424.0, 20.0 ],
                     "text": "stop - silence output and free graph"
                 }
             },
@@ -667,7 +826,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 900.0, 424.0, 20.0 ],
+                    "patching_rect": [ 140.0, 1207.0, 424.0, 20.0 ],
                     "text": "load <filename> - load .dsp file of def statements (also as 3rd constructor arg)"
                 }
             },
@@ -677,7 +836,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 920.0, 424.0, 20.0 ],
+                    "patching_rect": [ 140.0, 1227.0, 424.0, 20.0 ],
                     "text": "status - post info to Max console and info outlet"
                 }
             },
@@ -688,7 +847,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 125.0, 945.0, 400.0, 20.0 ],
+                    "patching_rect": [ 125.0, 1252.0, 400.0, 20.0 ],
                     "text": "DSP expression tokens:"
                 }
             },
@@ -698,8 +857,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 968.0, 734.0, 20.0 ],
-                    "text": "math: + - * / pow min max mod, clip mix/lerp, neg abs sin cos tanh exp log sqrt wrap fold floor ceil round sign db2a a2db mtof ftom"
+                    "patching_rect": [ 140.0, 1275.0, 867.0, 20.0 ],
+                    "text": "math: + - * / pow min max mod clip mix/lerp | cmp: gt lt gte lte eq neq | unary: neg abs sin cos tanh exp log sqrt wrap fold floor ceil round sign db2a a2db mtof ftom"
                 }
             },
             {
@@ -708,8 +867,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 988.0, 734.0, 20.0 ],
-                    "text": "gen: sinosc phasor noise pink dust tri saw pulse | env: decay | filt: onepole hp1 lag slew svflp svfhp svfbp biquad"
+                    "patching_rect": [ 140.0, 1295.0, 734.0, 20.0 ],
+                    "text": "gen: sinosc phasor noise pink dust tri saw pulse | env: decay line ar | filt: onepole hp1 lag slew svflp svfhp svfbp svfnotch biquad"
                 }
             },
             {
@@ -718,8 +877,8 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 1008.0, 834.0, 20.0 ],
-                    "text": "util: delay sah latch | stack: dup swap pop over rot | fb: fbread1-4 fbwrite1-4 | bind: <expr> let <name> | func: def <name> <body> | undef <name> | cleardef"
+                    "patching_rect": [ 140.0, 1315.0, 834.0, 20.0 ],
+                    "text": "delay: delay delayf delayc | util: sah latch | stack: dup swap pop over rot | fb: fbread1-4 fbwrite1-4 | bind: let <name> or let | n1 n2 | | func: def undef cleardef"
                 }
             },
             {
@@ -728,7 +887,7 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 140.0, 1028.0, 741.0, 20.0 ],
+                    "patching_rect": [ 140.0, 1335.0, 741.0, 20.0 ],
                     "text": "inputs: in1..in8, numbers | Multi-output: N stack values -> N outlets | Args: dsp_graph~ <num_in> <num_out> [file.dsp] (default 1 1, max 8)"
                 }
             }
@@ -738,7 +897,21 @@
                 "patchline": {
                     "destination": [ "obj-dg", 0 ],
                     "hidden": 1,
+                    "source": [ "obj-ar", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-biquad", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-cmp1", 0 ]
                 }
             },
             {
@@ -759,6 +932,13 @@
                     "destination": [ "obj-dg", 0 ],
                     "hidden": 1,
                     "source": [ "obj-delay", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-delayf", 0 ]
                 }
             },
             {
@@ -858,6 +1038,13 @@
                 "patchline": {
                     "destination": [ "obj-dg", 0 ],
                     "hidden": 1,
+                    "source": [ "obj-line", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
                     "source": [ "obj-load", 0 ]
                 }
             },
@@ -880,6 +1067,13 @@
                     "destination": [ "obj-dg", 0 ],
                     "hidden": 1,
                     "source": [ "obj-mtof", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-multilet", 0 ]
                 }
             },
             {
@@ -941,7 +1135,6 @@
             {
                 "patchline": {
                     "destination": [ "obj-dg", 0 ],
-                    "hidden": 1,
                     "source": [ "obj-status", 0 ]
                 }
             },
@@ -962,7 +1155,6 @@
             {
                 "patchline": {
                     "destination": [ "obj-dg", 0 ],
-                    "hidden": 1,
                     "source": [ "obj-stop", 0 ]
                 }
             },
@@ -985,6 +1177,13 @@
                     "destination": [ "obj-dg", 0 ],
                     "hidden": 1,
                     "source": [ "obj-svflp", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-dg", 0 ],
+                    "hidden": 1,
+                    "source": [ "obj-svfnotch", 0 ]
                 }
             },
             {

@@ -453,9 +453,13 @@ static void joy_tilde_bang(t_joy_tilde* x)
  * dsp message -- compile an RPN expression to a native DSP graph.
  *
  * This is NOT Joy. It's a minimal postfix DSP language:
- *   numbers, in1..in8, arithmetic (+,-,*,/,pow,min,max),
- *   math functions (sin,cos,tanh,exp,log,sqrt,abs,neg),
- *   generators (sinosc,phasor,noise).
+ *   numbers, in1..in8, arithmetic (+,-,*,/,pow,min,max,mod,clip,mix),
+ *   comparisons (gt,lt,gte,lte,eq,neq),
+ *   unary (neg,abs,sin,cos,tanh,exp,log,sqrt,wrap,fold,floor,ceil,round,sign,db2a,a2db,mtof,ftom),
+ *   generators (sinosc,phasor,noise,pink,dust,tri,saw,pulse),
+ *   envelopes (decay,line,ar), filters (onepole,hp1,lag,slew,svflp,svfhp,svfbp,svfnotch,biquad),
+ *   delay (delay,delayf), utilities (sah,latch), stack (dup,swap,pop,over,rot),
+ *   feedback (fbread1-4,fbwrite1-4), bindings (let), functions (def,undef,cleardef).
  *
  * The compiled graph runs in the audio thread with zero allocation.
  */

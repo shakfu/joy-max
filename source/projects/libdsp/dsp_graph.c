@@ -226,6 +226,29 @@ static void pull_mod(dsp_node* node, long n)
         out[i] = (b[i] != 0.0) ? fmod(a[i], b[i]) : 0.0;
 }
 
+/* --- comparison --- */
+
+#define DEF_CMP_PULL(name, op) \
+static void pull_##name(dsp_node* node, long n) \
+{ \
+    dsp_pull(node->in[0], n); \
+    dsp_pull(node->in[1], n); \
+    double* a = node->in[0]->out; \
+    double* b = node->in[1]->out; \
+    double* out = node->out; \
+    for (long i = 0; i < n; i++) \
+        out[i] = (a[i] op b[i]) ? 1.0 : 0.0; \
+}
+
+DEF_CMP_PULL(gt,  >)
+DEF_CMP_PULL(lt,  <)
+DEF_CMP_PULL(gte, >=)
+DEF_CMP_PULL(lte, <=)
+DEF_CMP_PULL(eq,  ==)
+DEF_CMP_PULL(neq, !=)
+
+#undef DEF_CMP_PULL
+
 /* --- ternary math --- */
 
 static void pull_clip(dsp_node* node, long n)
@@ -497,7 +520,7 @@ static void pull_pink(dsp_node* node, long n)
     double b1 = node->state.pink.b1;
     double b2 = node->state.pink.b2;
     uint64_t rng = node->state.pink.rng;
-    static long counter = 0;
+    long counter = node->state.pink.counter;
 
     for (long i = 0; i < n; i++) {
         /* generate white noise sample */
@@ -526,6 +549,7 @@ static void pull_pink(dsp_node* node, long n)
     node->state.pink.b1 = b1;
     node->state.pink.b2 = b2;
     node->state.pink.rng = rng;
+    node->state.pink.counter = counter;
 }
 
 /* dust -- random impulses at a given density (Hz) */
@@ -633,6 +657,101 @@ static void pull_decay(dsp_node* node, long n)
     }
     node->state.decay.env = env;
     node->state.decay.prev_trig = prev;
+}
+
+/* line -- triggered linear ramp 0->1. Inputs: trig, time_s */
+static void pull_line(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* trig   = node->in[0]->out;
+    double* time_s = node->in[1]->out;
+    double* out    = node->out;
+    double phase   = node->state.line.phase;
+    double prev    = node->state.line.prev_trig;
+    double inv_sr  = node->state.line.inv_sr;
+    int    active  = node->state.line.active;
+
+    for (long i = 0; i < n; i++) {
+        if (trig[i] > 0.0 && prev <= 0.0) {
+            phase = 0.0;
+            active = 1;
+        }
+        prev = trig[i];
+
+        out[i] = phase;
+
+        if (active) {
+            double t = time_s[i];
+            if (t > 0.0001) {
+                phase += inv_sr / t;
+                if (phase >= 1.0) {
+                    phase = 1.0;
+                    active = 0;
+                }
+            } else {
+                phase = 1.0;
+                active = 0;
+            }
+        }
+    }
+    node->state.line.phase = phase;
+    node->state.line.prev_trig = prev;
+    node->state.line.active = active;
+}
+
+/* ar -- triggered attack/release envelope. Inputs: trig, attack_s, release_s */
+static void pull_ar(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* trig   = node->in[0]->out;
+    double* atk_s  = node->in[1]->out;
+    double* rel_s  = node->in[2]->out;
+    double* out    = node->out;
+    double env     = node->state.ar.env;
+    double prev    = node->state.ar.prev_trig;
+    double inv_sr  = node->state.ar.inv_sr;
+    int    stage   = node->state.ar.stage;
+
+    for (long i = 0; i < n; i++) {
+        if (trig[i] > 0.0 && prev <= 0.0) {
+            stage = 1; /* attack */
+        }
+        prev = trig[i];
+
+        out[i] = env;
+
+        if (stage == 1) {
+            double a = atk_s[i];
+            if (a > 0.0001) {
+                env += inv_sr / a;
+                if (env >= 1.0) {
+                    env = 1.0;
+                    stage = 2; /* release */
+                }
+            } else {
+                env = 1.0;
+                stage = 2;
+            }
+        } else if (stage == 2) {
+            double r = rel_s[i];
+            if (r > 0.0001) {
+                env -= inv_sr / r;
+                if (env <= 0.0) {
+                    env = 0.0;
+                    stage = 0; /* idle */
+                }
+            } else {
+                env = 0.0;
+                stage = 0;
+            }
+        }
+    }
+    node->state.ar.env = env;
+    node->state.ar.prev_trig = prev;
+    node->state.ar.stage = stage;
 }
 
 /* --- filters --- */
@@ -822,6 +941,28 @@ static void pull_svfbp(dsp_node* node, long n)
     node->state.svf.ic2eq = ic2;
 }
 
+static void pull_svfnotch(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* sig = node->in[0]->out;
+    double* fc  = node->in[1]->out;
+    double* qp  = node->in[2]->out;
+    double* out = node->out;
+    double ic1 = node->state.svf.ic1eq;
+    double ic2 = node->state.svf.ic2eq;
+    double inv_sr = node->state.svf.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double lp, bp, hp;
+        svf_tick(sig[i], fc[i], qp[i], inv_sr, &ic1, &ic2, &lp, &bp, &hp);
+        out[i] = lp + hp;
+    }
+    node->state.svf.ic1eq = ic1;
+    node->state.svf.ic2eq = ic2;
+}
+
 /* biquad -- direct form II transposed */
 static void pull_biquad(dsp_node* node, long n)
 {
@@ -873,6 +1014,81 @@ static void pull_delay(dsp_node* node, long n)
         long rp = wp - delay_samps;
         if (rp < 0) rp += buf_len;
         out[i] = buf[rp];
+        wp++;
+        if (wp >= buf_len) wp = 0;
+    }
+    node->state.delay.write_pos = wp;
+}
+
+static void pull_delayf(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig  = node->in[0]->out;
+    double* time = node->in[1]->out;
+    double* out  = node->out;
+    double* buf  = node->state.delay.buf;
+    long buf_len = node->state.delay.buf_len;
+    long wp      = node->state.delay.write_pos;
+
+    for (long i = 0; i < n; i++) {
+        buf[wp] = sig[i];
+        double d = time[i];
+        if (d < 0.0) d = 0.0;
+        if (d >= (double)(buf_len - 1)) d = (double)(buf_len - 2);
+        long d_int = (long)d;
+        double frac = d - (double)d_int;
+        long rp0 = wp - d_int;
+        if (rp0 < 0) rp0 += buf_len;
+        long rp1 = rp0 - 1;
+        if (rp1 < 0) rp1 += buf_len;
+        out[i] = buf[rp0] + frac * (buf[rp1] - buf[rp0]);
+        wp++;
+        if (wp >= buf_len) wp = 0;
+    }
+    node->state.delay.write_pos = wp;
+}
+
+static void pull_delayc(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig  = node->in[0]->out;
+    double* time = node->in[1]->out;
+    double* out  = node->out;
+    double* buf  = node->state.delay.buf;
+    long buf_len = node->state.delay.buf_len;
+    long wp      = node->state.delay.write_pos;
+
+    for (long i = 0; i < n; i++) {
+        buf[wp] = sig[i];
+        double d = time[i];
+        if (d < 0.0) d = 0.0;
+        if (d >= (double)(buf_len - 2)) d = (double)(buf_len - 3);
+        long d_int = (long)d;
+        double frac = d - (double)d_int;
+
+        long rp0 = wp - d_int;
+        if (rp0 < 0) rp0 += buf_len;
+        long rpm1 = rp0 + 1;
+        if (rpm1 >= buf_len) rpm1 -= buf_len;
+        long rp1 = rp0 - 1;
+        if (rp1 < 0) rp1 += buf_len;
+        long rp2 = rp0 - 2;
+        if (rp2 < 0) rp2 += buf_len;
+
+        double ym1 = buf[rpm1];
+        double y0  = buf[rp0];
+        double y1  = buf[rp1];
+        double y2  = buf[rp2];
+
+        /* cubic Hermite interpolation */
+        double c0 = y0;
+        double c1 = 0.5 * (y1 - ym1);
+        double c2 = ym1 - 2.5 * y0 + 2.0 * y1 - 0.5 * y2;
+        double c3 = 0.5 * (y2 - ym1) + 1.5 * (y0 - y1);
+        out[i] = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
         wp++;
         if (wp >= buf_len) wp = 0;
     }
@@ -958,6 +1174,13 @@ static const dsp_op_entry dsp_op_table[] = {
     { "min",   NULL,    DSP_MIN,    pull_min,      2 },
     { "max",   NULL,    DSP_MAX_OP, pull_max,      2 },
     { "mod",   NULL,    DSP_MOD,    pull_mod,      2 },
+    /* comparison */
+    { "gt",    NULL,    DSP_GT,     pull_gt,       2 },
+    { "lt",    NULL,    DSP_LT,     pull_lt,       2 },
+    { "gte",   NULL,    DSP_GTE,    pull_gte,      2 },
+    { "lte",   NULL,    DSP_LTE,    pull_lte,      2 },
+    { "eq",    NULL,    DSP_EQ,     pull_eq,       2 },
+    { "neq",   NULL,    DSP_NEQ,    pull_neq,      2 },
     /* ternary math */
     { "clip",  NULL,    DSP_CLIP,   pull_clip,     3 },
     { "mix",   "lerp",  DSP_MIX,    pull_mix,      3 },
@@ -1269,7 +1492,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
         } else if (strcmp(sym, "noise") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_NOISE; nd->pull = pull_noise; nd->n_inputs = 0;
-            nd->state.rng_state = 0x12345678ABCDEF01ULL;
+            nd->state.rng_state = 0x12345678ABCDEF01ULL ^ ((uint64_t)(g->node_count) * 0x9E3779B97F4A7C15ULL);
             PUSH_NODE(nd);
         } else if (strcmp(sym, "pink") == 0) {
             dsp_node* nd = ALLOC_NODE();
@@ -1277,12 +1500,13 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->state.pink.b0 = 0.0;
             nd->state.pink.b1 = 0.0;
             nd->state.pink.b2 = 0.0;
-            nd->state.pink.rng = 0xABCDEF0123456789ULL;
+            nd->state.pink.rng = 0xABCDEF0123456789ULL ^ ((uint64_t)(g->node_count) * 0x9E3779B97F4A7C15ULL);
+            nd->state.pink.counter = 0;
             PUSH_NODE(nd);
         } else if (strcmp(sym, "dust") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_DUST; nd->pull = pull_dust; nd->n_inputs = 1;
-            nd->state.dust.rng = 0x9876543210FEDCBAULL;
+            nd->state.dust.rng = 0x9876543210FEDCBAULL ^ ((uint64_t)(g->node_count) * 0x9E3779B97F4A7C15ULL);
             nd->state.dust.inv_sr = 1.0 / sr;
             POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
@@ -1316,6 +1540,28 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->state.decay.env = 0.0;
             nd->state.decay.prev_trig = 0.0;
             nd->state.decay.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        } else if (strcmp(sym, "line") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_LINE; nd->pull = pull_line; nd->n_inputs = 2;
+            nd->state.line.phase = 0.0;
+            nd->state.line.prev_trig = 0.0;
+            nd->state.line.inv_sr = 1.0 / sr;
+            nd->state.line.active = 0;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "ar") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_AR; nd->pull = pull_ar; nd->n_inputs = 3;
+            nd->state.ar.env = 0.0;
+            nd->state.ar.prev_trig = 0.0;
+            nd->state.ar.inv_sr = 1.0 / sr;
+            nd->state.ar.stage = 0;
+            POP_NODE(nd->in[2]);
             POP_NODE(nd->in[1]);
             POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
@@ -1384,6 +1630,16 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             POP_NODE(nd->in[1]);
             POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
+        } else if (strcmp(sym, "svfnotch") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SVFNOTCH; nd->pull = pull_svfnotch; nd->n_inputs = 3;
+            nd->state.svf.ic1eq = 0.0;
+            nd->state.svf.ic2eq = 0.0;
+            nd->state.svf.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
         } else if (strcmp(sym, "biquad") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_BIQUAD; nd->pull = pull_biquad; nd->n_inputs = 6;
@@ -1401,6 +1657,40 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
         } else if (strcmp(sym, "delay") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_DELAY; nd->pull = pull_delay; nd->n_inputs = 2;
+            long max_delay = (long)(4.0 * sr);
+            if (max_delay < 1) max_delay = 1;
+            nd->state.delay.buf = (double*)DSP_ALLOC(max_delay * sizeof(double));
+            if (!nd->state.delay.buf) {
+                set_err(err, errlen, "delay buffer allocation failed");
+                goto fail;
+            }
+            memset(nd->state.delay.buf, 0, max_delay * sizeof(double));
+            nd->state.delay.buf_len = max_delay;
+            nd->state.delay.write_pos = 0;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        } else if (strcmp(sym, "delayf") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_DELAYF; nd->pull = pull_delayf; nd->n_inputs = 2;
+            long max_delay = (long)(4.0 * sr);
+            if (max_delay < 1) max_delay = 1;
+            nd->state.delay.buf = (double*)DSP_ALLOC(max_delay * sizeof(double));
+            if (!nd->state.delay.buf) {
+                set_err(err, errlen, "delay buffer allocation failed");
+                goto fail;
+            }
+            memset(nd->state.delay.buf, 0, max_delay * sizeof(double));
+            nd->state.delay.buf_len = max_delay;
+            nd->state.delay.write_pos = 0;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
+        } else if (strcmp(sym, "delayc") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_DELAYC; nd->pull = pull_delayc; nd->n_inputs = 2;
             long max_delay = (long)(4.0 * sr);
             if (max_delay < 1) max_delay = 1;
             nd->state.delay.buf = (double*)DSP_ALLOC(max_delay * sizeof(double));
@@ -1508,6 +1798,13 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
         case DSP_MIN:    result = (a < b) ? a : b; break;
         case DSP_MAX_OP: result = (a > b) ? a : b; break;
         case DSP_MOD:    result = (b != 0.0) ? fmod(a, b) : 0.0; break;
+        /* comparison */
+        case DSP_GT:     result = (a >  b) ? 1.0 : 0.0; break;
+        case DSP_LT:     result = (a <  b) ? 1.0 : 0.0; break;
+        case DSP_GTE:    result = (a >= b) ? 1.0 : 0.0; break;
+        case DSP_LTE:    result = (a <= b) ? 1.0 : 0.0; break;
+        case DSP_EQ:     result = (a == b) ? 1.0 : 0.0; break;
+        case DSP_NEQ:    result = (a != b) ? 1.0 : 0.0; break;
         /* ternary math */
         case DSP_CLIP: { double v = a; if (v < b) v = b; if (v > c) v = c; result = v; break; }
         case DSP_MIX:    result = a + (b - a) * c; break;
@@ -1589,7 +1886,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
 fail:
     /* free any delay buffers that were allocated before failure */
     for (int i = 0; i < g->node_count; i++) {
-        if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
+        if ((g->nodes[i].type == DSP_DELAY || g->nodes[i].type == DSP_DELAYF || g->nodes[i].type == DSP_DELAYC) && g->nodes[i].state.delay.buf)
             DSP_FREE(g->nodes[i].state.delay.buf);
     }
     for (int i = 0; i < DSP_MAX_FB_BUSES; i++) {
@@ -1677,7 +1974,7 @@ void dsp_graph_free(dsp_graph* g)
     if (!g) return;
     /* free delay buffers */
     for (int i = 0; i < g->node_count; i++) {
-        if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
+        if ((g->nodes[i].type == DSP_DELAY || g->nodes[i].type == DSP_DELAYF || g->nodes[i].type == DSP_DELAYC) && g->nodes[i].state.delay.buf)
             DSP_FREE(g->nodes[i].state.delay.buf);
     }
     /* free feedback bus buffers */
@@ -1703,6 +2000,16 @@ int dsp_func_define(dsp_func_table* ft, const char* name, const char* body,
                     char* err, int errlen)
 {
     if (!ft || !name || !body) return 0;
+
+    /* validate lengths */
+    if (strlen(name) >= DSP_FUNC_NAME_LEN) {
+        set_err(err, errlen, "function name too long (max %d chars)", DSP_FUNC_NAME_LEN - 1);
+        return 0;
+    }
+    if (strlen(body) >= DSP_FUNC_BODY_LEN) {
+        set_err(err, errlen, "function body too long (max %d chars)", DSP_FUNC_BODY_LEN - 1);
+        return 0;
+    }
 
     /* check if name already exists -- overwrite */
     for (int i = 0; i < ft->count; i++) {

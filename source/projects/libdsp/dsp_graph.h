@@ -39,6 +39,13 @@ typedef enum {
     DSP_MIN,
     DSP_MAX_OP,
     DSP_MOD,
+    /* comparison (binary, output 1.0 or 0.0) */
+    DSP_GT,
+    DSP_LT,
+    DSP_GTE,
+    DSP_LTE,
+    DSP_EQ,
+    DSP_NEQ,
     /* ternary math */
     DSP_CLIP,
     DSP_MIX,
@@ -72,6 +79,8 @@ typedef enum {
     DSP_PULSE,
     /* envelope */
     DSP_DECAY,
+    DSP_LINE,
+    DSP_AR,
     /* filters */
     DSP_ONEPOLE,
     DSP_HP1,
@@ -80,9 +89,12 @@ typedef enum {
     DSP_SVFLP,
     DSP_SVFHP,
     DSP_SVFBP,
+    DSP_SVFNOTCH,
     DSP_BIQUAD,
     /* delay + utilities */
     DSP_DELAY,
+    DSP_DELAYF,
+    DSP_DELAYC,
     DSP_SAH,
     DSP_LATCH,
     /* feedback */
@@ -114,6 +126,7 @@ typedef struct dsp_node {
         struct {
             double  b0, b1, b2;
             uint64_t rng;
+            long    counter;
         } pink;                     /* DSP_PINK */
         struct {
             double  threshold;
@@ -126,6 +139,18 @@ typedef struct dsp_node {
             double  inv_sr;
         } decay;                    /* DSP_DECAY */
         struct {
+            double  phase;          /* 0..1 ramp progress */
+            double  prev_trig;
+            double  inv_sr;
+            int     active;
+        } line;                     /* DSP_LINE */
+        struct {
+            double  env;
+            double  prev_trig;
+            double  inv_sr;
+            int     stage;          /* 0=idle, 1=attack, 2=release */
+        } ar;                       /* DSP_AR */
+        struct {
             double  y1;
             double  inv_sr;
         } onepole;                  /* DSP_ONEPOLE, DSP_HP1, DSP_LAG */
@@ -137,7 +162,7 @@ typedef struct dsp_node {
             double  ic1eq;
             double  ic2eq;
             double  inv_sr;
-        } svf;                      /* DSP_SVFLP, DSP_SVFHP, DSP_SVFBP */
+        } svf;                      /* DSP_SVF{LP,HP,BP,NOTCH} */
         struct {
             double  w1, w2;
         } biquad;                   /* DSP_BIQUAD */
@@ -145,7 +170,7 @@ typedef struct dsp_node {
             double* buf;
             long    buf_len;
             long    write_pos;
-        } delay;                    /* DSP_DELAY */
+        } delay;                    /* DSP_DELAY, DSP_DELAYF, DSP_DELAYC */
         struct {
             double  held;
             double  prev_trig;

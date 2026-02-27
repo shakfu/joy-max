@@ -290,6 +290,79 @@ TEST(process_sign) {
     PASS();
 }
 
+TEST(process_comparisons) {
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    /* gt */
+    dsp_graph* g = compile_and_process("5 3 gt", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("3 5 gt", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* lt */
+    g = compile_and_process("3 5 lt", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("5 3 lt", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* gte */
+    g = compile_and_process("5 5 gte", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("3 5 gte", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* lte */
+    g = compile_and_process("5 5 lte", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("5 3 lte", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* eq */
+    g = compile_and_process("7 7 eq", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("7 8 eq", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* neq */
+    g = compile_and_process("7 8 neq", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    g = compile_and_process("7 7 neq", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    PASS();
+}
+
 TEST(process_trig) {
     double out_buf[VS];
     double* outs[] = { out_buf };
@@ -447,6 +520,25 @@ TEST(process_noise) {
     PASS();
 }
 
+TEST(process_noise_independent) {
+    double out1[VS], out2[VS];
+    double* outs[] = { out1, out2 };
+
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("noise noise", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->num_roots == 2);
+    dsp_graph_process(g, NULL, 0, outs, 2, VS);
+
+    int all_same = 1;
+    for (long i = 0; i < VS; i++) {
+        if (out1[i] != out2[i]) { all_same = 0; break; }
+    }
+    ASSERT(!all_same);
+    dsp_graph_free(g);
+    PASS();
+}
+
 TEST(process_pink) {
     double out_buf[VS];
     double* outs[] = { out_buf };
@@ -457,6 +549,30 @@ TEST(process_pink) {
     for (long i = 0; i < VS; i++) {
         ASSERT(out_buf[i] >= -2.0 && out_buf[i] <= 2.0);
         if (i > 0 && out_buf[i] != out_buf[0]) all_same = 0;
+    }
+    ASSERT(!all_same);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_pink_independent) {
+    /* Two pink nodes in the same graph must have independent counters.
+       Before the fix, a static counter was shared across all instances,
+       causing identical output sequences when nodes were pulled in order. */
+    double out1[VS], out2[VS];
+    double* outs[] = { out1, out2 };
+
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("pink pink", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->num_roots == 2);
+    dsp_graph_process(g, NULL, 0, outs, 2, VS);
+
+    /* The two pink nodes use different RNG seeds (same initial seed but
+       pulled independently), so their outputs must differ. */
+    int all_same = 1;
+    for (long i = 0; i < VS; i++) {
+        if (out1[i] != out2[i]) { all_same = 0; break; }
     }
     ASSERT(!all_same);
     dsp_graph_free(g);
@@ -475,6 +591,26 @@ TEST(process_dust) {
         if (out_buf[i] == 1.0) has_impulse = 1;
     }
     ASSERT(has_impulse);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_dust_independent) {
+    /* Two dust nodes at high density should produce different impulse patterns */
+    double out1[VS], out2[VS];
+    double* outs[] = { out1, out2 };
+
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("10000 dust 10000 dust", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->num_roots == 2);
+    dsp_graph_process(g, NULL, 0, outs, 2, VS);
+
+    int all_same = 1;
+    for (long i = 0; i < VS; i++) {
+        if (out1[i] != out2[i]) { all_same = 0; break; }
+    }
+    ASSERT(!all_same);
     dsp_graph_free(g);
     PASS();
 }
@@ -532,6 +668,69 @@ TEST(process_decay) {
         ASSERT(out_buf[i] < out_buf[i-1]);
         ASSERT(out_buf[i] >= 0.0);
     }
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_line) {
+    /* trigger=1, time=0.01s -> ramp from 0 to 1 */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("1 0.01 line", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    /* first sample should be 0.0 (ramp starts at 0, output before increment) */
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    /* should be monotonically increasing */
+    for (long i = 1; i < VS; i++) {
+        ASSERT(out_buf[i] >= out_buf[i - 1]);
+        ASSERT(out_buf[i] >= 0.0 && out_buf[i] <= 1.0);
+    }
+    /* at 44100 Hz, 0.01s = 441 samples. After 64 samples we should be
+       partway through (~14.5%), well above 0 */
+    ASSERT(out_buf[VS - 1] > 0.1);
+    ASSERT(out_buf[VS - 1] < 1.0);
+
+    /* run enough blocks to complete the ramp, then verify it reaches 1.0 */
+    for (int blk = 0; blk < 10; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+    ASSERT_NEAR(out_buf[VS - 1], 1.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_ar) {
+    /* trigger=1, attack=0.005s, release=0.005s */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("1 0.005 0.005 ar", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    /* run enough blocks to complete the full AR cycle (~441 samples total) */
+    double peak = 0.0;
+    int found_rise = 0, found_fall = 0;
+    for (int blk = 0; blk < 10; blk++) {
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+        for (long i = 0; i < VS; i++) {
+            ASSERT(out_buf[i] >= -1e-10 && out_buf[i] <= 1.0 + 1e-10);
+            if (out_buf[i] > peak + 1e-10) found_rise = 1;
+            if (out_buf[i] < peak - 1e-10) found_fall = 1;
+            if (out_buf[i] > peak) peak = out_buf[i];
+        }
+    }
+    /* envelope must have risen to ~1.0, then fallen back toward 0 */
+    ASSERT_NEAR(peak, 1.0, 0.01);
+    ASSERT(found_rise);
+    ASSERT(found_fall);
+    /* after full cycle, should be back at 0 */
+    ASSERT_NEAR(out_buf[VS - 1], 0.0, 1e-10);
+
     dsp_graph_free(g);
     PASS();
 }
@@ -595,6 +794,110 @@ TEST(process_biquad) {
     PASS();
 }
 
+TEST(process_hp1) {
+    /* DC input through a highpass should converge to 0 (DC is blocked) */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("1 1000 hp1", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    for (int blk = 0; blk < 100; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    /* after settling, DC should be fully rejected */
+    ASSERT_NEAR(out_buf[VS - 1], 0.0, 1e-4);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_svflp_atten) {
+    /* A lowpass at 100 Hz fed with a 10 kHz sine should heavily attenuate.
+       We generate 10 kHz by using sinosc and check peak amplitude. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("10000 sinosc 100 0.707 svflp", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    /* let filter settle */
+    for (int blk = 0; blk < 50; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    /* find peak amplitude -- should be heavily attenuated */
+    double peak = 0.0;
+    for (long i = 0; i < VS; i++) {
+        double a = fabs(out_buf[i]);
+        if (a > peak) peak = a;
+    }
+    /* 10 kHz is ~40 dB above 100 Hz cutoff; expect < 0.05 amplitude */
+    ASSERT(peak < 0.05);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_svfhp_atten) {
+    /* A highpass at 10 kHz fed with a 100 Hz sine should heavily attenuate. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("100 sinosc 10000 0.707 svfhp", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    for (int blk = 0; blk < 50; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    double peak = 0.0;
+    for (long i = 0; i < VS; i++) {
+        double a = fabs(out_buf[i]);
+        if (a > peak) peak = a;
+    }
+    ASSERT(peak < 0.05);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_svfbp_atten) {
+    /* A bandpass centered at 10 kHz fed with a 100 Hz sine should attenuate. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("100 sinosc 10000 0.707 svfbp", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+    for (int blk = 0; blk < 50; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    double peak = 0.0;
+    for (long i = 0; i < VS; i++) {
+        double a = fabs(out_buf[i]);
+        if (a > peak) peak = a;
+    }
+    ASSERT(peak < 0.05);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_svfnotch) {
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    /* A notch filter at 1000 Hz should pass DC (0 Hz) through.
+       Feed a constant (DC) signal; after settling, output ~= input. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("1 1000 0.707 svfnotch", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    /* run several blocks to let the filter settle */
+    for (int blk = 0; blk < 100; blk++)
+        dsp_graph_process(g, NULL, 0, outs, 1, VS);
+
+    /* DC should pass through a notch (notch only rejects the center freq) */
+    ASSERT_NEAR(out_buf[VS - 1], 1.0, 1e-4);
+    dsp_graph_free(g);
+    PASS();
+}
+
 /* ---- delay ---- */
 
 TEST(process_delay) {
@@ -604,6 +907,203 @@ TEST(process_delay) {
     dsp_graph* g = compile_and_process("1 0 delay", outs, 1);
     ASSERT(g != NULL);
     ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_delay_multi_sample) {
+    /* Feed an impulse, delay by 10 samples.
+       Sample 0..9 should be 0, sample 10 should be 1. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 10 delay", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    memset(in_buf, 0, sizeof(in_buf));
+    in_buf[0] = 1.0;  /* impulse at sample 0 */
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    for (long i = 0; i < 10; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+    ASSERT_NEAR(out_buf[10], 1.0, 1e-10);
+    /* samples after impulse should be 0 again */
+    for (long i = 11; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_delayf_integer) {
+    /* At integer delay times, delayf should behave like delay */
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    dsp_graph* g = compile_and_process("1 0 delayf", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_delayf_fractional) {
+    /* Feed an impulse (1 at sample 0, then 0), delay by 0.5 samples.
+       At sample 0: write 1, read at pos -0.5 -> lerp(buf[0], buf[-1]) = lerp(1, 0) at frac=0.5 -> 0.5
+       At sample 1: write 0, read at pos 0.5  -> lerp(buf[1], buf[0]) = lerp(0, 1) at frac=0.5 -> 0.5
+       At sample 2: write 0, read at pos 1.5  -> lerp(buf[2], buf[1]) = lerp(0, 0) at frac=0.5 -> 0.0 */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 0.5 delayf", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    memset(in_buf, 0, sizeof(in_buf));
+    in_buf[0] = 1.0;  /* impulse */
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    ASSERT_NEAR(out_buf[0], 0.5, 1e-10);
+    ASSERT_NEAR(out_buf[1], 0.5, 1e-10);
+    ASSERT_NEAR(out_buf[2], 0.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delay_one_sample) {
+    /* delay by 1 sample: impulse at sample 0 should appear at sample 1 */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 1 delay", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    memset(in_buf, 0, sizeof(in_buf));
+    in_buf[0] = 1.0;
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    ASSERT_NEAR(out_buf[1], 1.0, 1e-10);
+    for (long i = 2; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delay_near_max) {
+    /* delay value exceeding buf_len should be clamped to buf_len-1.
+       buf_len = 4*SR = 176400. Request 200000 samples delay.
+       Feed a constant 1.0 -- on first block, all reads are from zeroed buffer. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 200000 delay", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    for (long i = 0; i < VS; i++) in_buf[i] = 1.0;
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    /* all output should be 0 since we're reading from zeroed buffer at max delay */
+    for (long i = 0; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delayf_near_max) {
+    /* delayf clamps to buf_len-2. Request a huge value.
+       Feed constant 1.0 -- first block reads from zeroed buffer. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 200000.5 delayf", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    for (long i = 0; i < VS; i++) in_buf[i] = 1.0;
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    /* all output should be 0 since we're reading from zeroed buffer at clamped max */
+    for (long i = 0; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delayc_integer) {
+    /* At integer delay times, delayc should pass through like delay/delayf */
+    double out_buf[VS];
+    double* outs[] = { out_buf };
+
+    dsp_graph* g = compile_and_process("1 0 delayc", outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 1.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delayc_fractional) {
+    /* Feed an impulse (1 at sample 0, then 0), delay by 0.5 samples.
+       Cubic Hermite uses 4 points: ym1, y0, y1, y2.
+       The result should differ from linear interpolation's simple 0.5. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 0.5 delayc", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    memset(in_buf, 0, sizeof(in_buf));
+    in_buf[0] = 1.0;  /* impulse */
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    /* Cubic Hermite with 4 points around each read position.
+       Sample 0: ym1=0, y0=1, y1=0, y2=0; frac=0.5
+         c0=1, c1=0, c2=-2.5, c3=1.5 -> 0.5625
+       Sample 1: ym1=0, y0=0, y1=1, y2=0; frac=0.5
+         c0=0, c1=0.5, c2=2, c3=-1.5 -> 0.5625
+       Sample 2: ym1=0, y0=0, y1=0, y2=1; frac=0.5
+         c0=0, c1=0, c2=-0.5, c3=0.5 -> -0.0625 */
+    ASSERT_NEAR(out_buf[0], 0.5625, 1e-10);
+    ASSERT_NEAR(out_buf[1], 0.5625, 1e-10);
+    ASSERT_NEAR(out_buf[2], -0.0625, 1e-10);
+    /* Verify cubic differs from linear (linear gives 0.5, 0.5, 0.0) */
+    ASSERT(fabs(out_buf[0] - 0.5) > 0.01);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(delayc_near_max) {
+    /* delayc clamps to buf_len-3. Request a huge value.
+       Feed constant 1.0 -- first block reads from zeroed buffer. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 200000 delayc", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+    for (long i = 0; i < VS; i++) in_buf[i] = 1.0;
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    /* all output should be 0 since we're reading from zeroed buffer at clamped max */
+    for (long i = 0; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+
     dsp_graph_free(g);
     PASS();
 }
@@ -921,6 +1421,54 @@ TEST(fold_let_reuse) {
     PASS();
 }
 
+TEST(fold_comparisons) {
+    char err[DSP_ERR_BUF];
+
+    /* 5 3 gt -> 1.0 */
+    dsp_graph* g = dsp_compile("5 3 gt", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* 3 5 gt -> 0.0 */
+    g = dsp_compile("3 5 gt", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* 3 3 eq -> 1.0 */
+    g = dsp_compile("3 3 eq", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* 3 4 neq -> 1.0 */
+    g = dsp_compile("3 4 neq", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* 5 5 lte -> 1.0 */
+    g = dsp_compile("5 5 lte", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 1.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* 3 5 gte -> 0.0 */
+    g = dsp_compile("3 5 gte", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+    ASSERT(g->root[0]->type == DSP_CONST);
+    ASSERT_NEAR(g->root[0]->state.constant, 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    PASS();
+}
+
 /* ---- aliases ---- */
 
 TEST(alias_add) {
@@ -966,12 +1514,67 @@ TEST(process_sah) {
     PASS();
 }
 
+TEST(process_sah_rising_edge) {
+    /* sah should only capture on rising edge (trig goes from <=0 to >0).
+       Feed changing signal with a trigger that fires at a specific sample. */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 in2 sah", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double sig_buf[VS], trig_buf[VS], out_buf[VS];
+    double* ins[]  = { sig_buf, trig_buf };
+    double* outs[] = { out_buf };
+
+    /* signal ramps 0,1,2,...; trigger fires at sample 5 only */
+    for (long i = 0; i < VS; i++) {
+        sig_buf[i] = (double)i;
+        trig_buf[i] = (i == 5) ? 1.0 : 0.0;
+    }
+
+    dsp_graph_process(g, ins, 2, outs, 1, VS);
+
+    /* before trigger: held value is 0 (initial) */
+    for (long i = 0; i < 5; i++)
+        ASSERT_NEAR(out_buf[i], 0.0, 1e-10);
+    /* at sample 5 and after: held value should be 5.0 */
+    for (long i = 5; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 5.0, 1e-10);
+
+    dsp_graph_free(g);
+    PASS();
+}
+
 TEST(process_latch) {
     double out_buf[VS];
     double* outs[] = { out_buf };
     dsp_graph* g = compile_and_process("5 latch", outs, 1);
     ASSERT(g != NULL);
     ASSERT_NEAR(out_buf[0], 5.0, 1e-10);
+    dsp_graph_free(g);
+    PASS();
+}
+
+TEST(process_latch_zero_hold) {
+    /* latch should hold the last non-zero value when input becomes 0 */
+    char err[DSP_ERR_BUF];
+    dsp_graph* g = dsp_compile("in1 latch", SR, VS, NULL, err, DSP_ERR_BUF);
+    ASSERT(g != NULL);
+
+    double in_buf[VS], out_buf[VS];
+    double* ins[]  = { in_buf };
+    double* outs[] = { out_buf };
+
+    /* first 10 samples = 7.0, then zeros */
+    for (long i = 0; i < VS; i++)
+        in_buf[i] = (i < 10) ? 7.0 : 0.0;
+
+    dsp_graph_process(g, ins, 1, outs, 1, VS);
+
+    /* all samples should output 7.0: first 10 because input=7,
+       rest because latch holds the last non-zero value */
+    for (long i = 0; i < VS; i++)
+        ASSERT_NEAR(out_buf[i], 7.0, 1e-10);
+
     dsp_graph_free(g);
     PASS();
 }
@@ -1104,6 +1707,40 @@ TEST(func_table_helpers) {
     dsp_func_clear(&ft);
     ASSERT(ft.count == 0);
 
+    PASS();
+}
+
+TEST(func_body_too_long) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+    char err[DSP_ERR_BUF];
+
+    /* build a body string longer than DSP_FUNC_BODY_LEN (1024) */
+    char long_body[2048];
+    memset(long_body, 'x', sizeof(long_body));
+    long_body[sizeof(long_body) - 1] = '\0';
+
+    int ok = dsp_func_define(&ft, "big", long_body, err, DSP_ERR_BUF);
+    ASSERT(ok == 0);
+    ASSERT(strstr(err, "body too long") != NULL);
+    ASSERT(ft.count == 0);
+    PASS();
+}
+
+TEST(func_name_too_long) {
+    dsp_func_table ft;
+    dsp_func_table_init(&ft);
+    char err[DSP_ERR_BUF];
+
+    /* build a name string longer than DSP_FUNC_NAME_LEN (64) */
+    char long_name[128];
+    memset(long_name, 'a', sizeof(long_name));
+    long_name[sizeof(long_name) - 1] = '\0';
+
+    int ok = dsp_func_define(&ft, long_name, "1 +", err, DSP_ERR_BUF);
+    ASSERT(ok == 0);
+    ASSERT(strstr(err, "name too long") != NULL);
+    ASSERT(ft.count == 0);
     PASS();
 }
 
@@ -1266,8 +1903,16 @@ TEST(load_text_prelude) {
         "def hp 0.707 svfhp\n"
         "def dcblock 20 hp1\n"
         "\n"
+        "# ------- conditionals -------\n"
+        "def select mix\n"
+        "def gate let | t s | s s t gt *\n"
+        "\n"
         "# ------- dynamics -------\n"
         "def noiseburst decay noise *\n"
+        "def burst let | t | t 0.002 0.05 ar noise *\n"
+        "\n"
+        "# ------- effects -------\n"
+        "def flange let | r s | s s r sinosc 20 * 40 + delayf + 0.5 *\n"
         "\n"
         "# ------- stereo -------\n"
         "def pan let | p s | s 1 p - * s p *\n"
@@ -1275,8 +1920,8 @@ TEST(load_text_prelude) {
 
     char err[DSP_ERR_BUF];
     int n = dsp_func_load_text(&ft, prelude, err, DSP_ERR_BUF);
-    ASSERT(n == 22);
-    ASSERT(ft.count == 22);
+    ASSERT(n == 26);
+    ASSERT(ft.count == 26);
 
     double out_buf[VS];
     double* outs[] = { out_buf };
@@ -1392,6 +2037,40 @@ TEST(load_text_prelude) {
     ASSERT(g != NULL);
     dsp_graph_free(g);
 
+    /* select: 10 20 1 select -> 20 (cond=1 picks second) */
+    g = compile_with_funcs_and_process("10 20 1 select", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 20.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* select: 10 20 0 select -> 10 (cond=0 picks first) */
+    g = compile_with_funcs_and_process("10 20 0 select", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 10.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* gate: 0.8 0.5 gate -> 0.8 (above threshold) */
+    g = compile_with_funcs_and_process("0.8 0.5 gate", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.8, 1e-10);
+    dsp_graph_free(g);
+
+    /* gate: 0.3 0.5 gate -> 0 (below threshold) */
+    g = compile_with_funcs_and_process("0.3 0.5 gate", &ft, outs, 1);
+    ASSERT(g != NULL);
+    ASSERT_NEAR(out_buf[0], 0.0, 1e-10);
+    dsp_graph_free(g);
+
+    /* burst compiles (trigger + ar + noise) */
+    g = compile_with_funcs_and_process("1 burst", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
+    /* flange compiles (signal + lfo rate + delayf) */
+    g = compile_with_funcs_and_process("440 sinosc 0.5 flange", &ft, outs, 1);
+    ASSERT(g != NULL);
+    dsp_graph_free(g);
+
     /* pan produces 2 outputs */
     double out2[VS];
     double* outs_stereo[] = { out_buf, out2 };
@@ -1459,6 +2138,7 @@ int main(void)
     run_test_process_neg();
     run_test_process_floor_ceil_round();
     run_test_process_sign();
+    run_test_process_comparisons();
     run_test_process_trig();
     run_test_process_wrap();
     run_test_process_mtof_ftom();
@@ -1475,23 +2155,42 @@ int main(void)
     run_test_process_sinosc();
     run_test_process_phasor();
     run_test_process_noise();
+    run_test_process_noise_independent();
     run_test_process_pink();
+    run_test_process_pink_independent();
     run_test_process_dust();
+    run_test_process_dust_independent();
     run_test_process_tri();
     run_test_process_saw();
     run_test_process_pulse();
 
     /* envelope */
     run_test_process_decay();
+    run_test_process_line();
+    run_test_process_ar();
 
     /* filters */
     run_test_process_onepole();
     run_test_process_lag();
     run_test_process_slew();
     run_test_process_biquad();
+    run_test_process_hp1();
+    run_test_process_svflp_atten();
+    run_test_process_svfhp_atten();
+    run_test_process_svfbp_atten();
+    run_test_process_svfnotch();
 
     /* delay */
     run_test_process_delay();
+    run_test_process_delay_multi_sample();
+    run_test_process_delayf_integer();
+    run_test_process_delayf_fractional();
+    run_test_delay_one_sample();
+    run_test_delay_near_max();
+    run_test_delayf_near_max();
+    run_test_delayc_integer();
+    run_test_delayc_fractional();
+    run_test_delayc_near_max();
 
     /* input */
     run_test_process_input();
@@ -1529,6 +2228,7 @@ int main(void)
     run_test_fold_no_fold_stateful();
     run_test_fold_partial();
     run_test_fold_let_reuse();
+    run_test_fold_comparisons();
 
     /* aliases */
     run_test_alias_add();
@@ -1537,7 +2237,9 @@ int main(void)
 
     /* edge cases */
     run_test_process_sah();
+    run_test_process_sah_rising_edge();
     run_test_process_latch();
+    run_test_process_latch_zero_hold();
     run_test_graph_free_null();
 
     /* compile-time functions */
@@ -1547,6 +2249,8 @@ int main(void)
     run_test_func_undefined_fails();
     run_test_func_recursion_depth();
     run_test_func_table_helpers();
+    run_test_func_body_too_long();
+    run_test_func_name_too_long();
 
     /* file loading (dsp_func_load_text) */
     run_test_load_text_basic();

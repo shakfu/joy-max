@@ -75,10 +75,30 @@ def hp 0.707 svfhp
 def dcblock 20 hp1
 
 
+# ------- conditionals -------
+
+# signal-rate select: a b cond select -> a if cond=0, b if cond=1
+# (cond should be 0.0 or 1.0 from a comparison op)
+def select mix
+
+# signal gate: signal threshold gate -> signal when above threshold, else 0
+def gate let | t s | s s t gt *
+
+
 # ------- dynamics -------
 
 # noise burst shaped by trigger envelope: trigger time noiseburst
 def noiseburst decay noise *
+
+# AR noise burst: trigger attack release burst
+def burst let | t | t 0.002 0.05 ar noise *
+
+
+# ------- effects -------
+
+# simple flanger: signal rate flange -> flanged signal
+# rate is LFO speed in Hz (try 0.2-2), uses sinusoidal delay modulation
+def flange let | r s | s s r sinosc 20 * 40 + delayf + 0.5 *
 
 
 # ------- stereo -------
