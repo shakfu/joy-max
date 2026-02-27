@@ -70,6 +70,7 @@ typedef struct _joy_tilde {
 
     /* DSP graph mode: compiled expression graph for real-time processing */
     dsp_graph*  graph;
+    dsp_func_table funcs;
 
     void*       info_outlet;
     long        verbose;
@@ -94,6 +95,9 @@ static void  joy_tilde_bang(t_joy_tilde* x);
 static void  joy_tilde_stop(t_joy_tilde* x);
 static void  joy_tilde_clear(t_joy_tilde* x);
 static void  joy_tilde_status(t_joy_tilde* x);
+static void  joy_tilde_def(t_joy_tilde* x, t_symbol* s, long argc, t_atom* argv);
+static void  joy_tilde_undef(t_joy_tilde* x, t_symbol* s);
+static void  joy_tilde_cleardef(t_joy_tilde* x);
 
 /* I/O callbacks */
 static void  tilde_io_write_char(void* user_data, int ch);
@@ -131,6 +135,9 @@ void ext_main(void* r)
     class_addmethod(c, (method)joy_tilde_stop,      "stop",     0);
     class_addmethod(c, (method)joy_tilde_clear,     "clear",    0);
     class_addmethod(c, (method)joy_tilde_status,    "status",   0);
+    class_addmethod(c, (method)joy_tilde_def,       "def",      A_GIMME, 0);
+    class_addmethod(c, (method)joy_tilde_undef,     "undef",    A_SYM, 0);
+    class_addmethod(c, (method)joy_tilde_cleardef,  "cleardef", 0);
     class_addmethod(c, (method)joy_tilde_assist,    "assist",   A_CANT, 0);
 
     CLASS_ATTR_LONG(c, "verbose", 0, t_joy_tilde, verbose);
@@ -184,6 +191,7 @@ static void* joy_tilde_new(t_symbol* s, long argc, t_atom* argv)
     }
 
     x->graph = NULL;
+    dsp_func_table_init(&x->funcs);
 
     joy_tilde_init_context(x);
 
@@ -233,7 +241,8 @@ static void joy_tilde_dsp64(t_joy_tilde* x, t_object* dsp64, short* count,
     if (x->graph && x->perform_code[0]) {
         char dsp_err[DSP_ERR_BUF];
         dsp_graph* new_graph = dsp_compile(x->perform_code, samplerate,
-                                           maxvectorsize, dsp_err, DSP_ERR_BUF);
+                                           maxvectorsize, &x->funcs,
+                                           dsp_err, DSP_ERR_BUF);
         if (new_graph) {
             dsp_graph_free(x->graph);
             x->graph = new_graph;
@@ -342,7 +351,8 @@ static void joy_tilde_anything(t_joy_tilde* x, t_symbol* s, long argc, t_atom* a
         /* try DSP compile first */
         char dsp_err[DSP_ERR_BUF];
         dsp_graph* new_graph = dsp_compile(text, x->sample_rate,
-                                           x->vector_size, dsp_err, DSP_ERR_BUF);
+                                           x->vector_size, &x->funcs,
+                                           dsp_err, DSP_ERR_BUF);
         if (new_graph) {
             /* DSP compile succeeded -- use graph mode */
             dsp_graph* old = x->graph;
@@ -468,7 +478,8 @@ static void joy_tilde_dsp_msg(t_joy_tilde* x, t_symbol* s, long argc, t_atom* ar
 
     char dsp_err[DSP_ERR_BUF];
     dsp_graph* new_graph = dsp_compile(text, x->sample_rate,
-                                       x->vector_size, dsp_err, DSP_ERR_BUF);
+                                       x->vector_size, &x->funcs,
+                                       dsp_err, DSP_ERR_BUF);
     sysmem_freeptr(text);
 
     if (!new_graph) {
@@ -531,6 +542,57 @@ static void joy_tilde_status(t_joy_tilde* x)
     atom_setlong(atoms + 2, x->num_inputs);
     atom_setlong(atoms + 3, x->num_outputs);
     outlet_anything(x->info_outlet, gensym("status"), 4, atoms);
+}
+
+/* ---------- function definition messages ---------- */
+
+static void joy_tilde_def(t_joy_tilde* x, t_symbol* s, long argc, t_atom* argv)
+{
+    (void)s;
+
+    if (argc < 2) {
+        object_error((t_object*)x, "joy~: def requires a name and body");
+        return;
+    }
+
+    if (atom_gettype(argv) != A_SYM) {
+        object_error((t_object*)x, "joy~: def: first argument must be a name");
+        return;
+    }
+    const char* name = atom_getsym(argv)->s_name;
+
+    long textsize = 0;
+    char* text = NULL;
+    t_max_err err = atom_gettext(argc - 1, argv + 1, &textsize, &text,
+                                  OBEX_UTIL_ATOM_GETTEXT_SYM_NO_QUOTE);
+    if (err != MAX_ERR_NONE || !textsize || !text) {
+        object_error((t_object*)x, "joy~: def: failed to convert body to text");
+        if (text) sysmem_freeptr(text);
+        return;
+    }
+
+    char def_err[JOY_TILDE_ERR_BUF];
+    if (!dsp_func_define(&x->funcs, name, text, def_err, JOY_TILDE_ERR_BUF))
+        object_error((t_object*)x, "joy~: def: %s", def_err);
+    else if (x->verbose)
+        object_post((t_object*)x, "joy~: defined '%s' = %s", name, text);
+
+    sysmem_freeptr(text);
+}
+
+static void joy_tilde_undef(t_joy_tilde* x, t_symbol* s)
+{
+    if (!dsp_func_undef(&x->funcs, s->s_name))
+        object_error((t_object*)x, "joy~: undef: '%s' not found", s->s_name);
+    else if (x->verbose)
+        object_post((t_object*)x, "joy~: undefined '%s'", s->s_name);
+}
+
+static void joy_tilde_cleardef(t_joy_tilde* x)
+{
+    dsp_func_clear(&x->funcs);
+    if (x->verbose)
+        object_post((t_object*)x, "joy~: all functions cleared");
 }
 
 /* ---------- I/O callbacks ---------- */

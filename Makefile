@@ -6,7 +6,7 @@ MAX_VERSIONS := 8 9
 
 
 
-.phony: all build clean reset setup update-submodules link
+.phony: all build clean reset setup update-submodules link test
 
 all: build
 
@@ -15,6 +15,9 @@ build: reset
 	@mkdir -p build && cd build && \
 		cmake .. && \
 		cmake --build . --config Release
+
+test:
+	@cd build && ctest --output-on-failure -R dsp_graph
 
 clean:
 	@rm -rf externals/*

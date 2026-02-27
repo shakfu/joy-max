@@ -489,6 +489,63 @@ static void pull_noise(dsp_node* node, long n)
     node->state.rng_state = rng;
 }
 
+/* pink noise -- Voss-McCartney algorithm with 3 octave rows */
+static void pull_pink(dsp_node* node, long n)
+{
+    double* out = node->out;
+    double b0 = node->state.pink.b0;
+    double b1 = node->state.pink.b1;
+    double b2 = node->state.pink.b2;
+    uint64_t rng = node->state.pink.rng;
+    static long counter = 0;
+
+    for (long i = 0; i < n; i++) {
+        /* generate white noise sample */
+        uint64_t r = xorshift64(&rng);
+        double white = (double)(int64_t)r / (double)INT64_MAX;
+
+        /* update rows based on counter bits */
+        long c = counter++;
+        if ((c & 0x01) == 0) {
+            r = xorshift64(&rng);
+            b0 = (double)(int64_t)r / (double)INT64_MAX;
+        }
+        if ((c & 0x03) == 0) {
+            r = xorshift64(&rng);
+            b1 = (double)(int64_t)r / (double)INT64_MAX;
+        }
+        if ((c & 0x07) == 0) {
+            r = xorshift64(&rng);
+            b2 = (double)(int64_t)r / (double)INT64_MAX;
+        }
+
+        out[i] = (b0 + b1 + b2 + white) * 0.25;
+    }
+
+    node->state.pink.b0 = b0;
+    node->state.pink.b1 = b1;
+    node->state.pink.b2 = b2;
+    node->state.pink.rng = rng;
+}
+
+/* dust -- random impulses at a given density (Hz) */
+static void pull_dust(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    double* density = node->in[0]->out;
+    double* out = node->out;
+    uint64_t rng = node->state.dust.rng;
+    double inv_sr = node->state.dust.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        uint64_t r = xorshift64(&rng);
+        double rand_val = (double)(r >> 11) / (double)(UINT64_MAX >> 11); /* [0,1) */
+        double thresh = density[i] * inv_sr;
+        out[i] = (rand_val < thresh) ? 1.0 : 0.0;
+    }
+    node->state.dust.rng = rng;
+}
+
 static void pull_tri(dsp_node* node, long n)
 {
     dsp_pull(node->in[0], n);
@@ -543,6 +600,41 @@ static void pull_pulse(dsp_node* node, long n)
     node->state.osc.phase = phase;
 }
 
+/* --- envelope --- */
+
+/* decay -- triggered exponential decay. Inputs: trig, time_s */
+static void pull_decay(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* trig = node->in[0]->out;
+    double* time_s = node->in[1]->out;
+    double* out = node->out;
+    double env = node->state.decay.env;
+    double prev = node->state.decay.prev_trig;
+    double inv_sr = node->state.decay.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        /* rising edge trigger */
+        if (trig[i] > 0.0 && prev <= 0.0)
+            env = 1.0;
+        prev = trig[i];
+
+        out[i] = env;
+
+        /* exponential decay */
+        double t = time_s[i];
+        if (t > 0.0001) {
+            double coeff = exp(-inv_sr / t);
+            env *= coeff;
+        } else {
+            env = 0.0;
+        }
+    }
+    node->state.decay.env = env;
+    node->state.decay.prev_trig = prev;
+}
+
 /* --- filters --- */
 
 static void pull_onepole(dsp_node* node, long n)
@@ -579,6 +671,65 @@ static void pull_hp1(dsp_node* node, long n)
         out[i] = sig[i] - y1;
     }
     node->state.onepole.y1 = y1;
+}
+
+/* lag -- exponential smoothing parameterized by time constant (seconds) */
+static void pull_lag(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    double* sig = node->in[0]->out;
+    double* time_s = node->in[1]->out;
+    double* out = node->out;
+    double y1 = node->state.onepole.y1;
+    double inv_sr = node->state.onepole.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double t = time_s[i];
+        double coeff;
+        if (t > 0.0001)
+            coeff = 1.0 - exp(-inv_sr / t);
+        else
+            coeff = 1.0;
+        y1 += coeff * (sig[i] - y1);
+        out[i] = y1;
+    }
+    node->state.onepole.y1 = y1;
+}
+
+/* slew -- rate limiter with separate rise/fall times */
+static void pull_slew(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    double* sig = node->in[0]->out;
+    double* rise_s = node->in[1]->out;
+    double* fall_s = node->in[2]->out;
+    double* out = node->out;
+    double y1 = node->state.slew.y1;
+    double inv_sr = node->state.slew.inv_sr;
+
+    for (long i = 0; i < n; i++) {
+        double target = sig[i];
+        double delta = target - y1;
+        if (delta > 0.0) {
+            double rise = rise_s[i];
+            if (rise > 0.0001) {
+                double max_rise = inv_sr / rise;
+                if (delta > max_rise) delta = max_rise;
+            }
+        } else if (delta < 0.0) {
+            double fall = fall_s[i];
+            if (fall > 0.0001) {
+                double max_fall = -inv_sr / fall;
+                if (delta < max_fall) delta = max_fall;
+            }
+        }
+        y1 += delta;
+        out[i] = y1;
+    }
+    node->state.slew.y1 = y1;
 }
 
 /* SVF (Zavalishin/Simper topology) -- shared tick, different output taps */
@@ -671,6 +822,36 @@ static void pull_svfbp(dsp_node* node, long n)
     node->state.svf.ic2eq = ic2;
 }
 
+/* biquad -- direct form II transposed */
+static void pull_biquad(dsp_node* node, long n)
+{
+    dsp_pull(node->in[0], n);
+    dsp_pull(node->in[1], n);
+    dsp_pull(node->in[2], n);
+    dsp_pull(node->in[3], n);
+    dsp_pull(node->in[4], n);
+    dsp_pull(node->in[5], n);
+    double* sig   = node->in[0]->out;
+    double* cb0   = node->in[1]->out;
+    double* cb1   = node->in[2]->out;
+    double* cb2   = node->in[3]->out;
+    double* ca1   = node->in[4]->out;
+    double* ca2   = node->in[5]->out;
+    double* out   = node->out;
+    double w1 = node->state.biquad.w1;
+    double w2 = node->state.biquad.w2;
+
+    for (long i = 0; i < n; i++) {
+        double x = sig[i];
+        double y = cb0[i] * x + w1;
+        w1 = cb1[i] * x - ca1[i] * y + w2;
+        w2 = cb2[i] * x - ca2[i] * y;
+        out[i] = y;
+    }
+    node->state.biquad.w1 = w1;
+    node->state.biquad.w2 = w2;
+}
+
 /* --- delay --- */
 
 static void pull_delay(dsp_node* node, long n)
@@ -736,6 +917,27 @@ static void pull_latch(dsp_node* node, long n)
     node->state.latch.held = held;
 }
 
+/* --- feedback --- */
+
+static void pull_fbread(dsp_node* node, long n)
+{
+    /* output was pre-filled from the feedback bus at the start of process */
+    (void)node;
+    (void)n;
+}
+
+static void pull_fbwrite(dsp_node* node, long n)
+{
+    /* fbwrite is a sink: pulls its input, writes to fb bus buffer, no output */
+    dsp_pull(node->in[0], n);
+    /* actual write to fb bus happens in dsp_graph_process after pulling */
+    /* we store input in our output buffer as a staging area */
+    double* sig = node->in[0]->out;
+    double* out = node->out;
+    for (long i = 0; i < n; i++)
+        out[i] = sig[i];
+}
+
 /* ---- op table for stateless ops ---- */
 
 typedef struct {
@@ -795,7 +997,23 @@ static void set_err(char* err, int errlen, const char* fmt, ...)
 
 /* ---- compiler ---- */
 
+/* Fetch next token, popping tokenizer stack on end-of-body */
+static dsp_token tok_next_stacked(dsp_tokenizer* stack, int* depth)
+{
+    while (*depth >= 0) {
+        dsp_token tok = tok_next(&stack[*depth]);
+        if (tok.type != TOK_END || *depth == 0)
+            return tok;
+        (*depth)--;   /* pop finished function body, resume caller */
+    }
+    dsp_token end;
+    memset(&end, 0, sizeof(end));
+    end.type = TOK_END;
+    return end;
+}
+
 dsp_graph* dsp_compile(const char* expr, double sr, long vs,
+                       const dsp_func_table* funcs,
                        char* err, int errlen)
 {
     if (!expr || !expr[0]) {
@@ -816,8 +1034,14 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     dsp_node* stack[DSP_MAX_NODES];
     int sp = 0;
 
-    dsp_tokenizer tokenizer;
-    tok_init(&tokenizer, expr);
+    /* let binding table */
+    #define DSP_MAX_BINDINGS 32
+    struct { char name[64]; dsp_node* node; } bindings[DSP_MAX_BINDINGS];
+    int nbindings = 0;
+
+    dsp_tokenizer tok_stack[DSP_MAX_CALL_DEPTH];
+    int tok_depth = 0;
+    tok_init(&tok_stack[0], expr);
 
     #define PUSH_NODE(nd) do { \
         if (sp >= DSP_MAX_NODES) { \
@@ -838,7 +1062,7 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     #define ALLOC_NODE() (&g->nodes[g->node_count++])
 
     for (;;) {
-        dsp_token tok = tok_next(&tokenizer);
+        dsp_token tok = tok_next_stacked(tok_stack, &tok_depth);
 
         if (tok.type == TOK_END)
             break;
@@ -874,6 +1098,36 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->n_inputs = 0;
             nd->state.inlet_idx = idx;
             PUSH_NODE(nd);
+            continue;
+        }
+
+        /* feedback read: fbread1..fbread4 */
+        if (strncmp(sym, "fbread", 6) == 0 && sym[6] >= '1' && sym[6] <= '4' && sym[7] == '\0') {
+            int bus = sym[6] - '1';
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_FBREAD;
+            nd->pull = pull_fbread;
+            nd->n_inputs = 0;
+            nd->state.fb.bus_idx = bus;
+            PUSH_NODE(nd);
+            continue;
+        }
+
+        /* feedback write: fbwrite1..fbwrite4 (sink: pops 1, pushes 0) */
+        if (strncmp(sym, "fbwrite", 7) == 0 && sym[7] >= '1' && sym[7] <= '4' && sym[8] == '\0') {
+            int bus = sym[7] - '1';
+            if (g->fb_writer_count >= DSP_MAX_FB_BUSES) {
+                set_err(err, errlen, "too many fbwrite nodes (max %d)", DSP_MAX_FB_BUSES);
+                goto fail;
+            }
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_FBWRITE;
+            nd->pull = pull_fbwrite;
+            nd->n_inputs = 1;
+            nd->state.fb.bus_idx = bus;
+            POP_NODE(nd->in[0]);
+            /* register as fb writer -- don't push on stack (it's a sink) */
+            g->fb_writers[g->fb_writer_count++] = nd;
             continue;
         }
 
@@ -927,6 +1181,28 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             continue;
         }
 
+        /* let bindings: <expr> let <name> */
+        if (strcmp(sym, "let") == 0) {
+            if (sp < 1) {
+                set_err(err, errlen, "stack underflow at 'let'");
+                goto fail;
+            }
+            dsp_token name_tok = tok_next_stacked(tok_stack, &tok_depth);
+            if (name_tok.type != TOK_SYMBOL) {
+                set_err(err, errlen, "'let' must be followed by a name");
+                goto fail;
+            }
+            if (nbindings >= DSP_MAX_BINDINGS) {
+                set_err(err, errlen, "too many let bindings (max %d)", DSP_MAX_BINDINGS);
+                goto fail;
+            }
+            strncpy(bindings[nbindings].name, name_tok.symbol, 63);
+            bindings[nbindings].name[63] = '\0';
+            bindings[nbindings].node = stack[--sp];
+            nbindings++;
+            continue;
+        }
+
         /* look up in stateless op table */
         int found = 0;
         for (int ti = 0; ti < (int)DSP_OP_TABLE_LEN; ti++) {
@@ -968,6 +1244,21 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->type = DSP_NOISE; nd->pull = pull_noise; nd->n_inputs = 0;
             nd->state.rng_state = 0x12345678ABCDEF01ULL;
             PUSH_NODE(nd);
+        } else if (strcmp(sym, "pink") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_PINK; nd->pull = pull_pink; nd->n_inputs = 0;
+            nd->state.pink.b0 = 0.0;
+            nd->state.pink.b1 = 0.0;
+            nd->state.pink.b2 = 0.0;
+            nd->state.pink.rng = 0xABCDEF0123456789ULL;
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "dust") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_DUST; nd->pull = pull_dust; nd->n_inputs = 1;
+            nd->state.dust.rng = 0x9876543210FEDCBAULL;
+            nd->state.dust.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
         } else if (strcmp(sym, "tri") == 0) {
             dsp_node* nd = ALLOC_NODE();
             nd->type = DSP_TRI; nd->pull = pull_tri; nd->n_inputs = 1;
@@ -991,6 +1282,17 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
 
+        /* envelope */
+        } else if (strcmp(sym, "decay") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_DECAY; nd->pull = pull_decay; nd->n_inputs = 2;
+            nd->state.decay.env = 0.0;
+            nd->state.decay.prev_trig = 0.0;
+            nd->state.decay.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+
         /* filters */
         } else if (strcmp(sym, "onepole") == 0) {
             dsp_node* nd = ALLOC_NODE();
@@ -1005,6 +1307,23 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->type = DSP_HP1; nd->pull = pull_hp1; nd->n_inputs = 2;
             nd->state.onepole.y1 = 0.0;
             nd->state.onepole.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "lag") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_LAG; nd->pull = pull_lag; nd->n_inputs = 2;
+            nd->state.onepole.y1 = 0.0;
+            nd->state.onepole.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "slew") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_SLEW; nd->pull = pull_slew; nd->n_inputs = 3;
+            nd->state.slew.y1 = 0.0;
+            nd->state.slew.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
             POP_NODE(nd->in[1]);
             POP_NODE(nd->in[0]);
             PUSH_NODE(nd);
@@ -1034,6 +1353,18 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             nd->state.svf.ic1eq = 0.0;
             nd->state.svf.ic2eq = 0.0;
             nd->state.svf.inv_sr = 1.0 / sr;
+            POP_NODE(nd->in[2]);
+            POP_NODE(nd->in[1]);
+            POP_NODE(nd->in[0]);
+            PUSH_NODE(nd);
+        } else if (strcmp(sym, "biquad") == 0) {
+            dsp_node* nd = ALLOC_NODE();
+            nd->type = DSP_BIQUAD; nd->pull = pull_biquad; nd->n_inputs = 6;
+            nd->state.biquad.w1 = 0.0;
+            nd->state.biquad.w2 = 0.0;
+            POP_NODE(nd->in[5]);
+            POP_NODE(nd->in[4]);
+            POP_NODE(nd->in[3]);
             POP_NODE(nd->in[2]);
             POP_NODE(nd->in[1]);
             POP_NODE(nd->in[0]);
@@ -1074,8 +1405,33 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
             PUSH_NODE(nd);
 
         } else {
-            set_err(err, errlen, "unknown token '%s'", sym);
-            goto fail;
+            /* check let bindings (reverse order for shadowing) */
+            int bound = 0;
+            for (int bi = nbindings - 1; bi >= 0; bi--) {
+                if (strcmp(sym, bindings[bi].name) == 0) {
+                    PUSH_NODE(bindings[bi].node);
+                    bound = 1;
+                    break;
+                }
+            }
+            if (!bound && funcs) {
+                for (int fi = 0; fi < funcs->count; fi++) {
+                    if (strcmp(sym, funcs->funcs[fi].name) == 0) {
+                        if (tok_depth >= DSP_MAX_CALL_DEPTH - 1) {
+                            set_err(err, errlen, "function call too deep (max %d)", DSP_MAX_CALL_DEPTH);
+                            goto fail;
+                        }
+                        tok_depth++;
+                        tok_init(&tok_stack[tok_depth], funcs->funcs[fi].body);
+                        bound = 1;
+                        break;
+                    }
+                }
+            }
+            if (!bound) {
+                set_err(err, errlen, "unknown token '%s'", sym);
+                goto fail;
+            }
         }
     }
 
@@ -1083,13 +1439,78 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
     #undef POP_NODE
     #undef ALLOC_NODE
 
-    /* must have exactly one value on compile stack */
-    if (sp != 1) {
-        set_err(err, errlen, "expression leaves %d values on stack (expected 1)", sp);
+    /* multi-output: expression may leave 1..DSP_MAX_OUTPUTS values on stack */
+    if (sp < 1) {
+        set_err(err, errlen, "expression leaves nothing on stack");
+        goto fail;
+    }
+    if (sp > DSP_MAX_OUTPUTS) {
+        set_err(err, errlen, "expression leaves %d values on stack (max %d)", sp, DSP_MAX_OUTPUTS);
         goto fail;
     }
 
-    g->root = stack[0];
+    g->num_roots = sp;
+    for (int i = 0; i < sp; i++)
+        g->root[i] = stack[i];
+
+    /* constant folding: collapse pure math nodes with all-constant inputs */
+    for (int i = 0; i < g->node_count; i++) {
+        dsp_node* nd = &g->nodes[i];
+        if (nd->type == DSP_CONST || nd->n_inputs == 0)
+            continue;
+
+        /* check all inputs are constant */
+        int all_const = 1;
+        for (int k = 0; k < nd->n_inputs; k++) {
+            if (nd->in[k]->type != DSP_CONST) { all_const = 0; break; }
+        }
+        if (!all_const) continue;
+
+        double a = (nd->n_inputs >= 1) ? nd->in[0]->state.constant : 0.0;
+        double b = (nd->n_inputs >= 2) ? nd->in[1]->state.constant : 0.0;
+        double c = (nd->n_inputs >= 3) ? nd->in[2]->state.constant : 0.0;
+        double result;
+
+        switch (nd->type) {
+        /* binary math */
+        case DSP_ADD:    result = a + b; break;
+        case DSP_SUB:    result = a - b; break;
+        case DSP_MUL:    result = a * b; break;
+        case DSP_DIV:    result = (b != 0.0) ? a / b : 0.0; break;
+        case DSP_POW:    result = pow(a, b); break;
+        case DSP_MIN:    result = (a < b) ? a : b; break;
+        case DSP_MAX_OP: result = (a > b) ? a : b; break;
+        case DSP_MOD:    result = (b != 0.0) ? fmod(a, b) : 0.0; break;
+        /* ternary math */
+        case DSP_CLIP: { double v = a; if (v < b) v = b; if (v > c) v = c; result = v; break; }
+        case DSP_MIX:    result = a + (b - a) * c; break;
+        /* unary math */
+        case DSP_NEG:    result = -a; break;
+        case DSP_ABS:    result = fabs(a); break;
+        case DSP_SIN:    result = sin(a); break;
+        case DSP_COS:    result = cos(a); break;
+        case DSP_TANH:   result = tanh(a); break;
+        case DSP_EXP:    result = exp(a); break;
+        case DSP_LOG:    result = (a > 0.0) ? log(a) : 0.0; break;
+        case DSP_SQRT:   result = (a >= 0.0) ? sqrt(a) : 0.0; break;
+        case DSP_WRAP:   result = a - floor(a); break;
+        case DSP_FOLD:   { double v = a - floor(a); v *= 2.0; if (v > 1.0) v = 2.0 - v; result = v; break; }
+        case DSP_FLOOR:  result = floor(a); break;
+        case DSP_CEIL:   result = ceil(a); break;
+        case DSP_ROUND:  result = round(a); break;
+        case DSP_SIGN:   result = (a > 0.0) ? 1.0 : (a < 0.0) ? -1.0 : 0.0; break;
+        case DSP_DB2A:   result = pow(10.0, a / 20.0); break;
+        case DSP_A2DB:   { double v = fabs(a); result = (v > 0.0) ? 20.0 * log10(v) : -120.0; break; }
+        case DSP_MTOF:   result = 440.0 * pow(2.0, (a - 69.0) / 12.0); break;
+        case DSP_FTOM:   result = (a > 0.0) ? 69.0 + 12.0 * log2(a / 440.0) : 0.0; break;
+        default:         continue; /* stateful node -- skip */
+        }
+
+        nd->type = DSP_CONST;
+        nd->pull = pull_const;
+        nd->state.constant = result;
+        nd->n_inputs = 0;
+    }
 
     /* allocate all output buffers in a single pool */
     long pool_size = (long)g->node_count * vs;
@@ -1109,6 +1530,33 @@ dsp_graph* dsp_compile(const char* expr, double sr, long vs,
         }
     }
 
+    /* allocate feedback bus buffers */
+    for (int i = 0; i < g->fb_writer_count; i++) {
+        int bus = g->fb_writers[i]->state.fb.bus_idx;
+        if (!g->fb_bufs[bus]) {
+            g->fb_bufs[bus] = (double*)DSP_ALLOC(vs * sizeof(double));
+            if (!g->fb_bufs[bus]) {
+                set_err(err, errlen, "feedback bus buffer allocation failed");
+                goto fail;
+            }
+            memset(g->fb_bufs[bus], 0, vs * sizeof(double));
+        }
+    }
+    /* also allocate for fbread nodes that reference buses without writers */
+    for (int i = 0; i < g->node_count; i++) {
+        if (g->nodes[i].type == DSP_FBREAD) {
+            int bus = g->nodes[i].state.fb.bus_idx;
+            if (!g->fb_bufs[bus]) {
+                g->fb_bufs[bus] = (double*)DSP_ALLOC(vs * sizeof(double));
+                if (!g->fb_bufs[bus]) {
+                    set_err(err, errlen, "feedback bus buffer allocation failed");
+                    goto fail;
+                }
+                memset(g->fb_bufs[bus], 0, vs * sizeof(double));
+            }
+        }
+    }
+
     return g;
 
 fail:
@@ -1116,6 +1564,10 @@ fail:
     for (int i = 0; i < g->node_count; i++) {
         if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
             DSP_FREE(g->nodes[i].state.delay.buf);
+    }
+    for (int i = 0; i < DSP_MAX_FB_BUSES; i++) {
+        if (g->fb_bufs[i])
+            DSP_FREE(g->fb_bufs[i]);
     }
     if (g->buffer_pool)
         DSP_FREE(g->buffer_pool);
@@ -1129,7 +1581,7 @@ void dsp_graph_process(dsp_graph* g,
                        double** ins, long numins,
                        double** outs, long numouts, long n)
 {
-    if (!g || !g->root) return;
+    if (!g || g->num_roots < 1) return;
 
     /* clamp n to vector_size (buffers are sized to vector_size) */
     if (n > g->vector_size) n = g->vector_size;
@@ -1152,18 +1604,42 @@ void dsp_graph_process(dsp_graph* g,
         }
     }
 
-    /* pull from root */
-    dsp_pull(g->root, n);
-
-    /* copy root output to outlet 0 */
-    if (numouts > 0 && outs[0] && g->root->out) {
-        memcpy(outs[0], g->root->out, n * sizeof(double));
+    /* pre-fill fbread nodes from feedback bus buffers (previous block's data) */
+    for (int i = 0; i < g->node_count; i++) {
+        if (g->nodes[i].type == DSP_FBREAD) {
+            int bus = g->nodes[i].state.fb.bus_idx;
+            if (g->fb_bufs[bus]) {
+                memcpy(g->nodes[i].out, g->fb_bufs[bus], n * sizeof(double));
+            }
+        }
     }
 
-    /* silence remaining outlets */
-    for (long ch = 1; ch < numouts; ch++) {
-        if (outs[ch])
+    /* pull each root */
+    for (int r = 0; r < g->num_roots; r++) {
+        dsp_pull(g->root[r], n);
+    }
+
+    /* pull feedback writers (they may not be on any root's path) */
+    for (int i = 0; i < g->fb_writer_count; i++) {
+        dsp_pull(g->fb_writers[i], n);
+    }
+
+    /* copy fbwrite outputs to feedback bus buffers for next block */
+    for (int i = 0; i < g->fb_writer_count; i++) {
+        int bus = g->fb_writers[i]->state.fb.bus_idx;
+        if (g->fb_bufs[bus]) {
+            memcpy(g->fb_bufs[bus], g->fb_writers[i]->out, n * sizeof(double));
+        }
+    }
+
+    /* copy root outputs to outlets */
+    for (long ch = 0; ch < numouts; ch++) {
+        if (!outs[ch]) continue;
+        if (ch < g->num_roots && g->root[ch] && g->root[ch]->out) {
+            memcpy(outs[ch], g->root[ch]->out, n * sizeof(double));
+        } else {
             memset(outs[ch], 0, n * sizeof(double));
+        }
     }
 }
 
@@ -1177,7 +1653,69 @@ void dsp_graph_free(dsp_graph* g)
         if (g->nodes[i].type == DSP_DELAY && g->nodes[i].state.delay.buf)
             DSP_FREE(g->nodes[i].state.delay.buf);
     }
+    /* free feedback bus buffers */
+    for (int i = 0; i < DSP_MAX_FB_BUSES; i++) {
+        if (g->fb_bufs[i])
+            DSP_FREE(g->fb_bufs[i]);
+    }
     if (g->buffer_pool)
         DSP_FREE(g->buffer_pool);
     DSP_FREE(g);
+}
+
+/* ---- function table management ---- */
+
+void dsp_func_table_init(dsp_func_table* ft)
+{
+    if (!ft) return;
+    ft->count = 0;
+    memset(ft->funcs, 0, sizeof(ft->funcs));
+}
+
+int dsp_func_define(dsp_func_table* ft, const char* name, const char* body,
+                    char* err, int errlen)
+{
+    if (!ft || !name || !body) return 0;
+
+    /* check if name already exists -- overwrite */
+    for (int i = 0; i < ft->count; i++) {
+        if (strcmp(ft->funcs[i].name, name) == 0) {
+            strncpy(ft->funcs[i].body, body, DSP_FUNC_BODY_LEN - 1);
+            ft->funcs[i].body[DSP_FUNC_BODY_LEN - 1] = '\0';
+            return 1;
+        }
+    }
+
+    if (ft->count >= DSP_MAX_FUNCTIONS) {
+        set_err(err, errlen, "too many functions (max %d)", DSP_MAX_FUNCTIONS);
+        return 0;
+    }
+
+    strncpy(ft->funcs[ft->count].name, name, DSP_FUNC_NAME_LEN - 1);
+    ft->funcs[ft->count].name[DSP_FUNC_NAME_LEN - 1] = '\0';
+    strncpy(ft->funcs[ft->count].body, body, DSP_FUNC_BODY_LEN - 1);
+    ft->funcs[ft->count].body[DSP_FUNC_BODY_LEN - 1] = '\0';
+    ft->count++;
+    return 1;
+}
+
+int dsp_func_undef(dsp_func_table* ft, const char* name)
+{
+    if (!ft || !name) return 0;
+    for (int i = 0; i < ft->count; i++) {
+        if (strcmp(ft->funcs[i].name, name) == 0) {
+            /* shift remaining entries down */
+            for (int j = i; j < ft->count - 1; j++)
+                ft->funcs[j] = ft->funcs[j + 1];
+            ft->count--;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void dsp_func_clear(dsp_func_table* ft)
+{
+    if (!ft) return;
+    ft->count = 0;
 }

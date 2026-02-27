@@ -73,6 +73,8 @@ MACRO(SUBDIRLIST result curdir)
   SET(${result} ${dirlist})
 ENDMACRO()
 
+enable_testing()
+
 # Build static libraries first (needed by externals)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/joy_core)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/libdsp)
