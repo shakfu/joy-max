@@ -9,7 +9,9 @@ Max/MSP externals for DSP programming with the Joy language and a compiled stack
 Joy language DSP external. Dual mode operation:
 
 - **`perform <expr>`** -- tries compiled DSP graph first, falls back to Joy interpreter (buffer mode).
+
 - **`dsp <expr>`** -- compiles an RPN expression to a native DSP graph (no fallback, reports errors).
+
 - **`bang`** -- re-evaluates the last perform expression.
 
 ### dsp_graph~
@@ -64,7 +66,9 @@ def osc2 dup 1.003 * sinosc swap sinosc + 0.5 *
 ```
 
 - `def <name> <body>` -- define a function
+
 - `undef <name>` -- remove a function
+
 - `cleardef` -- remove all functions
 
 ### File Loading

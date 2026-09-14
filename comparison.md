@@ -22,25 +22,37 @@ Three externals across two projects:
 ## Where dsp_graph~ has a defensible niche
 
 - Zero-dependency, zero-interpretation audio path (matters for hard real-time guarantees)
+
 - Embeddable anywhere -- 2 files, pure C, no C++ runtime, no frameworks
+
 - Compile cost is trivial (microseconds vs SAPF's interpreter setup)
+
 - Constant folding eliminates pure-math subexpressions at compile time
+
 - Let bindings enable node sharing without re-evaluation (DAG, not tree)
+
 - Function definitions provide reusable abstractions without runtime cost
 
 ## Where sapf~ wins
 
 - Full language: lambdas, closures, forms, lazy infinite sequences
+
 - Auto-expanding multi-channel from lists (`[300 301] 0 saw .3 *` -> stereo with 1Hz beating)
+
 - Rich parameterization via forms (overridable synth patches)
+
 - Larger UGen library and more filter/delay variants
+
 - Recursive feedback structures (comb, allpass reverb, FDN)
 
 ## Remaining gaps
 
 1. **Recursive feedback** -- `dsp_graph` has `fbread`/`fbwrite` buses (fixed 1-block delay, 4 buses), which covers basic feedback paths. SAPF has arbitrary recursive structures, comb filters, and allpass reverbs as built-in primitives. Karplus-Strong is now possible in dsp_graph (using `fbread`/`fbwrite` + `delayf`), but ergonomics are rougher.
+
 2. **Multi-channel expansion** -- `dsp_graph` supports N outputs (stack -> outlets), but has no auto-expansion from a single expression. Each channel must be explicitly written. SAPF's list-based expansion is more elegant for polyphony and stereo.
+
 3. **Rich envelopes/sequencing** -- `dsp_graph` has `decay`, `line`, `ar`. SAPF has full ADSR, breakpoint envelopes, and sequencing primitives.
+
 4. **Dynamic behavior** -- `dsp_graph` is compile-once, run-forever. No per-sample conditional branching (though comparison ops + `mix` enable signal-rate switching). SAPF's interpreter allows more dynamic structures.
 
 ## Strategic question
